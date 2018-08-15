@@ -25,7 +25,7 @@ public:
   // Running
   void run();
 
-private:
+protected:
   // ROS
   ros::NodeHandle nh_;
   ros::NodeHandle nh_local_;
@@ -36,6 +36,7 @@ private:
   std::string frame_id_;
   std::string scan_topic_;
   bool pub_markers_;
+    bool use_scan_;
   // Line extraction
   LineExtraction line_extraction_;
   bool data_cached_; // true after first scan used to cache data

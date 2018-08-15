@@ -16,7 +16,8 @@ LineExtractionROS::LineExtractionROS(ros::NodeHandle& nh, ros::NodeHandle& nh_lo
 {
   loadParameters();
   line_publisher_ = nh_.advertise<laser_line_extraction::LineSegmentList>("line_segments", 1);
-  scan_subscriber_ = nh_.subscribe(scan_topic_, 1, &LineExtractionROS::laserScanCallback, this);
+  if(use_scan_)
+    scan_subscriber_ = nh_.subscribe(scan_topic_, 1, &LineExtractionROS::laserScanCallback, this);
   if (pub_markers_)
   {
     marker_publisher_ = nh_.advertise<visualization_msgs::Marker>("line_markers", 1);
@@ -65,6 +66,9 @@ void LineExtractionROS::loadParameters()
   
   std::string frame_id, scan_topic;
   bool pub_markers;
+
+  nh_local_.param<bool>("use_scan",use_scan_, false);
+  ROS_DEBUG("use_scan: %d", use_scan_);
 
   nh_local_.param<std::string>("frame_id", frame_id, "laser");
   frame_id_ = frame_id;
