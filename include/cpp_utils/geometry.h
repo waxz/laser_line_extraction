@@ -98,6 +98,9 @@ namespace geometry_util{
 
 
     }
+    double NormalAngle(double angle){
+        return atan2(sin(angle),cos(angle));
+    }
 }
 
 

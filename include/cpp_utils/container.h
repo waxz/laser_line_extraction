@@ -49,11 +49,7 @@ namespace container_util {
     }
 
 //xmlrpc value to map and vector
-    inline XmlRpc::XmlRpcValue getXmlRpcValueFromRos(ros::NodeHandle nh, string key) {
-        XmlRpc::XmlRpcValue value;
-        nh.getParam(key, value);
-        return value;
-    }
+
 
     inline vector<XmlRpc::XmlRpcValue> createVectorFromXmlRpcValue(XmlRpc::XmlRpcValue value) {
         vector<XmlRpc::XmlRpcValue> vec;
@@ -100,18 +96,19 @@ namespace container_util {
         });
     }
 
-    vector<int> createRangeVector(int size, int start) {
-        vector<int> v;
+    template <class T>
+    vector<T> createRangeVector(int size, T start) {
+        vector<T> v;
         v.reserve(size);
         iota_n(std::back_inserter(v), size, start); // fill them with 3...16
         return v;
 
 
     }
-
-    valarray<int> createRangeValarray(int size, int start) {
+    template <class T>
+    valarray<T> createRangeValarray(int size, T start) {
         auto vec = createRangeVector(size, start);
-        valarray<int> val = createValarrayFromVector(vec);
+        valarray<T> val = createValarrayFromVector(vec);
         return val;
 
     }

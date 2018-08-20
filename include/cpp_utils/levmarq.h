@@ -191,17 +191,60 @@ namespace opt_util {
             double yaw0 = x(2);
             double k1, k2;
 
-            k1 = tan(yaw0 + 0.5 * paramAngle_);
-            k2 = tan(yaw0 - 0.5 * paramAngle_);
+            double turnAngle = 0.25*M_PI;//paramAngle_ - 0.5*M_PI;
 
 
-            for (int i = 0; i < values(); i++) {
-                double inputValue = measuredValues(i, 1);
-                double predictValue = measuredValues(i, 0);
 
-                // error = y_true - y_predict
-                fvec(i) = predictValue - ((inputValue < y0) ? x0 + (inputValue - y0) / k1 : x0 + (inputValue - y0) / k2);
+            // fix: assuption error ,the model may be   x = f(y)
+            // or y = f(x)
+
+            double inputValue , predictValue;
+            // x = f(y)
+            if(fabs(yaw0)<=turnAngle || fabs(yaw0 - M_PI)<=turnAngle){
+                if(fabs(yaw0)<0.5*M_PI){
+                    k1 = tan(yaw0 + 0.5 * paramAngle_);
+                    k2 = tan(yaw0  - 0.5 * paramAngle_);
+                }else if(fabs(yaw0)>0.5*M_PI){
+                    k1 = tan(yaw0 - 0.5 * paramAngle_);
+                    k2 = tan(yaw0  + 0.5 * paramAngle_);
+                }
+
+
+
+
+                for (int i = 0; i < values(); i++) {
+                    inputValue = measuredValues(i, 1);
+                    predictValue = measuredValues(i, 0);
+
+                    // error = y_true - y_predict
+                    fvec(i) = predictValue - ((inputValue < y0) ? x0 + (inputValue - y0) / k1 : x0 + (inputValue - y0) / k2);
+                }
+            } else {
+                // y = f(x)
+                if(yaw0 > turnAngle){
+                    k1 = tan(yaw0 - 0.5 * paramAngle_);
+                    k2 = tan(yaw0  + 0.5 * paramAngle_);
+                } else if(yaw0 < -turnAngle){
+                    k1 = tan(yaw0 + 0.5 * paramAngle_);
+                    k2 = tan(yaw0  - 0.5 * paramAngle_);
+                }
+
+
+
+                for (int i = 0; i < values(); i++){
+                    inputValue = measuredValues(i, 0);
+                    predictValue = measuredValues(i, 1);
+
+                    // error = y_true - y_predict
+                    fvec(i) = predictValue - ((inputValue < x0) ? y0 + (inputValue - x0) * k1 : y0 + (inputValue - x0) * k2);
+                }
+
+
             }
+
+
+
+
             return 0;
         }
 

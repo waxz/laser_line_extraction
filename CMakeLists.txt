@@ -74,6 +74,7 @@ target_link_libraries(line_extraction_node line_extraction_ros ${catkin_LIBRARIE
 add_executable(line_detector_node src/line_detector.cpp)
 target_link_libraries(line_detector_node line_extraction_ros ${catkin_LIBRARIES})
 
+add_executable(test_node src/test.cpp)
 
 # catkin_add_gtest(${PROJECT_NAME}-test test/test_laser_line_extraction.cpp)
 install(TARGETS line_detector_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
