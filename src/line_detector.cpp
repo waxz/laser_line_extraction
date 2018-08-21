@@ -4,6 +4,7 @@
 #include <cpp_utils/geometry.h>
 #include <cpp_utils/container.h>
 #include <cpp_utils/levmarq.h>
+#include <cpp_utils/threading.h>
 #include <ros/console.h>
 #include <geometry_msgs/PoseArray.h>
 
@@ -254,6 +255,8 @@ protected:
 
     int filter_window_;
 
+    double max_fit_error_;
+
 
 
     // method
@@ -279,6 +282,8 @@ protected:
 
         nh_private_.param("filter_window",filter_window_,4);
 
+        nh_private_.param("max_fit_error",max_fit_error_, 0.01);
+
 
 
 
@@ -297,12 +302,12 @@ protected:
 
     }
 
-    geometry_msgs::PoseStamped fitModel(vector<type_util::Point2d> & pointsInModel,SimpleShape &shape){
+    bool fitModel(vector<type_util::Point2d> & pointsInModel,double x0, double x1, double x2,geometry_msgs::PoseStamped & ModelPose){
 
         targetPoints_.header = latestScan_.header;
         geometry_msgs::Pose pose;
 
-        auto q = tf::createQuaternionFromYaw(shape.intersect_angle);
+        auto q = tf::createQuaternionFromYaw(x2);
 
         pose.orientation.x = q.x();
         pose.orientation.y = q.y();
@@ -327,9 +332,9 @@ protected:
         Eigen::VectorXd x(3);
         decltype(x) model(1);
 
-        x(0) = shape.intersect.x;             // initial value for 'a'
-        x(1) = shape.intersect.y;             // initial value for 'b'
-        x(2) = shape.intersect_angle;             // initial value for 'c'
+        x(0) = x0;             // initial value for 'a'
+        x(1) = x1;             // initial value for 'b'
+        x(2) = x2;             // initial value for 'c'
         model(0) =  M_PI*120.0/180.0;
         ROS_INFO_STREAM("get init result \n"<<x);
 
@@ -340,8 +345,17 @@ protected:
         sm.setParams(x);
         sm.feedData(measuredValues);
         int status = sm.solve();
-        x = sm.getParam();
-        ROS_INFO_STREAM("get optimize result \n"<<x);
+        auto meanerror = sm.getMeanError();
+        ROS_INFO_STREAM("get optimize result \n"<<x<<"\nmean error"<<meanerror);
+
+        // check fit error and
+        if(meanerror < max_fit_error_){
+            x = sm.getParam();
+
+        } else{
+            return false;
+        }
+
 
 #endif
         targetPose_.header = latestScan_.header;
@@ -361,8 +375,9 @@ protected:
 
         targetPub_.publish(targetPose_);
         pointsPub_.publish(targetPoints_);
+        ModelPose = targetPose_;
 
-        return targetPose_;
+        return true;
 
 
 
@@ -592,8 +607,12 @@ public:
                 }
 
                 // fit model
-                auto res = fitModel(PointsInModel,pairResults[i]);
-                targets.push_back(res);
+                geometry_msgs::PoseStamped targetPose;
+                bool fitsucc = fitModel(PointsInModel,pairResults[i].intersect.x,pairResults[i].intersect.y,pairResults[i].intersect_angle,targetPose);
+                if(fitsucc){
+                    targets.push_back(targetPose);
+
+                }
             }
 
         }
@@ -610,17 +629,62 @@ class TargetPublish{
 protected:
     ros::NodeHandle nh_;
     ros::NodeHandle nh_private_;
+
+    // detector
     SimpleTriangleDetector sd_;
+
+
+
+
+    // threading
+    std::shared_ptr<tf::StampedTransform> sharedTransform_ptr;
+    threading_util::ThreadClass<threading_util::Func_tfb, tf::StampedTransform> threadClass_;
+    threading_util::Func_tfb tfThread_;
 
 public:
     TargetPublish(ros::NodeHandle nh, ros::NodeHandle nh_private):
             nh_(nh),
             nh_private_(nh_private),
-            sd_(nh,nh_private)
+            sd_(nh,nh_private),
+            sharedTransform_ptr(),
+            tfThread_(10)
     {
+        threadClass_.setTarget(tfThread_);
+
+
 
     }
+    ~TargetPublish(){
+    }
     void publish(){
+        auto targets = sd_.detect();
+        if(targets.size() == 1){
+            // publish
+            auto pose = targets[0];
+
+            string fixed_frame_id_, target_framde_id_;
+            fixed_frame_id_ = "base_laser";
+            target_framde_id_ = "base_triangle";
+
+            //
+            tf::Transform transform;
+            tf::poseMsgToTF(pose.pose,transform);
+            ros::Time tn = ros::Time::now();
+            ros::Duration transform_tolerance;
+            transform_tolerance.fromSec(0.1);
+            ros::Time transform_expiration = (tn + transform_tolerance);
+            tf::StampedTransform stampedTransform = tf::StampedTransform(transform,
+                                                                       transform_expiration,
+                                                                       fixed_frame_id_, target_framde_id_);
+            threadClass_.syncArg(stampedTransform);
+
+
+
+
+            if (!threadClass_.isRunning()){
+                threadClass_.start();
+            }
+        }
 
     };
 
@@ -640,6 +704,8 @@ int main(int argc, char **argv)
     ros::NodeHandle nh;
     ros::NodeHandle nh_local("~");
 
+    TargetPublish targetPub_(nh,nh_local);
+
 
     double frequency;
     nh_local.param<double>("frequency", frequency, 25);
@@ -652,7 +718,10 @@ int main(int argc, char **argv)
     // get data
     // if successful
     // extract line
+
+#if 0
     SimpleTriangleDetector sd(nh,nh_local);
+#endif
 
     time_util::Timer t;
     while (ros::ok())
@@ -663,15 +732,14 @@ int main(int argc, char **argv)
         line_extractor.getLines();
 #endif
 
-        if(debug_mode){
-            auto sd_new = SimpleTriangleDetector(nh,nh_local);
-            sd_new.detect();
-            continue;
-        }
 
 
         t.start();
+        targetPub_.publish();
+#if 0
         sd.detect();
+#endif
+
         t.stop();
         ROS_INFO("full time %.4f",t.elapsedSeconds());
         rate.sleep();

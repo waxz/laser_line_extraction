@@ -299,7 +299,7 @@ namespace threading_util {
         }
     };
 
-
+    template<class T, class F>
     class ThreadClass {
     public: // methods
         /** Constructor
@@ -310,13 +310,16 @@ namespace threading_util {
 
         std::shared_ptr<Cmd> cmd_;
 
-        /* add target function
-         * */
-        template<class T>
-        void setTarget(T target, tf::TransformBroadcaster *tfb);
+        std::shared_ptr<F> arg_;
 
-        template<class T, class F>
-        void setTarget(T target, F arg);
+
+
+
+        void setTarget(T target, std::shared_ptr<F> arg);
+
+        void setTarget(T target);
+
+        void syncArg(F data);
 
         /** Destructor
          *
@@ -325,15 +328,7 @@ namespace threading_util {
          */
         ~ThreadClass();
 
-    private: // methods
-        /** This is the function that the thread executes.
-         *
-         * The thread will finish when this function returns.
-         */
-        template<class T>
-        void threadMain(T target, tf::TransformBroadcaster *tfb);
 
-    public:
         void start() {
             cmd_.get()->run_ = true;
         }
@@ -355,62 +350,47 @@ namespace threading_util {
 
 
     //-----------------------------------------------------------------------------
-    inline    ThreadClass::ThreadClass() {
+    template<class T, class F>
+    inline    ThreadClass<T,F>::ThreadClass(){
         cmd_ = std::make_shared<Cmd>(false);
+        arg_ = std::make_shared<F>();
 
 
     } // Constructor
-
-    inline    ThreadClass::~ThreadClass() {
+    template<class T, class F>
+    inline    ThreadClass<T,F>::~ThreadClass() {
         internalThread_.interrupt();
         // internalThread_.join(); // make damn sure that the internal thread is gone
         // before we destroy the class data.
     } // Destructor
 
 
-    //---------------------------------------------------------------------
-    template<class T>
-    void ThreadClass::setTarget(T target, tf::TransformBroadcaster *tfb) {
-        // this should always be the last line in the constructor
-        internalThread_ = boost::thread(boost::bind(&ThreadClass::threadMain<T>, this, target, tfb));
-    }
+
 
     template<class T, class F>
-    void ThreadClass::setTarget(T target, F arg) {
+    void ThreadClass<T,F>::setTarget(T target, std::shared_ptr<F> arg) {
         // this should always be the last line in the constructor
         // send data and cmd signal to thread
 
         internalThread_ = boost::thread(boost::bind<void>(target, arg, cmd_));
     }
 
+    template<class T, class F>
+    void ThreadClass<T,F>::setTarget(T target) {
+        // this should always be the last line in the constructor
+        // send data and cmd signal to thread
+
+        internalThread_ = boost::thread(boost::bind<void>(target, arg_, cmd_));
+    }
+
+    template<class T, class F>
+    void ThreadClass<T,F>::syncArg(F data){
+
+        std::swap(*arg_,data);
+    }
+
 //-----------------------------------------------------------------------------
-    // demo thread
-    template<class T>
-    inline void ThreadClass::threadMain(T target, tf::TransformBroadcaster *tfb) {
-        try {
-            /* add whatever code you want the thread to execute here. */
-            while (1) {
 
-                cout << "run once!!!" << endl;
-                tfb->sendTransform(*target);
-
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-            }
-
-        }
-        catch (boost::thread_interrupted &interruption) {
-            // thread was interrupted, this is expected.
-            cout << "******************thread was interrupted, this is expected." << endl;
-
-        }
-        catch (std::exception &e) {
-            // an unhandled exception reached this point, this constitutes an error
-            cout << "****************** an unhandled exception reached this point, this constitutes an error" << endl;
-
-        }
-
-    } // threadMain
 
 //-----------------------------------------------------------------------------
 
@@ -419,16 +399,15 @@ namespace threading_util {
     struct Func_tfb {
 
         tf::TransformBroadcaster *tfb_;
+        std::shared_ptr<tf::TransformBroadcaster> tfb_ptr_;
 
         int sleep_;
 
-        Func_tfb(int sleep = 10) {
-            sleep_ = 10;
+        Func_tfb(double rate = 10) {
+            tfb_ptr_ = std::make_shared<tf::TransformBroadcaster>();
+            sleep_ = int(1000/rate);
         };
 
-        void set(tf::TransformBroadcaster *tfb) {
-            tfb_ = tfb;
-        }
 
         template<class T, class C>
         void operator()(T data, C cmd) {
@@ -451,7 +430,7 @@ namespace threading_util {
                     // read shared data in thread . make it thread safe
                     tf::StampedTransform msg = *data;
                     msg.stamp_ = transform_expiration;
-                    tfb_->sendTransform(msg);
+                    (*tfb_ptr_).sendTransform(msg);
 #endif
                     std::this_thread::sleep_for(std::chrono::milliseconds(sleep_));
 

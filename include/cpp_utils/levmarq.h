@@ -156,6 +156,14 @@ namespace opt_util {
         Eigen::VectorXd getParam() {
             return x_;
         }
+        double getMeanError(){
+            Eigen::VectorXd fvec(functor_.m);
+            functor_(x_,fvec);
+            double meanerror = fvec.array().abs().mean();
+            return meanerror;
+
+
+        }
 
     };
 
