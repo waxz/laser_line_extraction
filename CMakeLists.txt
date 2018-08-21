@@ -71,17 +71,22 @@ add_dependencies(line_extraction_ros laser_line_extraction_generate_messages_cpp
 add_executable(line_extraction_node src/line_extraction_node.cpp)
 target_link_libraries(line_extraction_node line_extraction_ros ${catkin_LIBRARIES})
 
-add_executable(line_detector_node src/line_detector.cpp)
-target_link_libraries(line_detector_node line_extraction_ros ${catkin_LIBRARIES})
+add_library(line_detector_lib src/line_detector.cpp)
+target_link_libraries(line_detector_lib line_extraction_ros ${catkin_LIBRARIES})
 
-add_executable(test_node src/test.cpp)
+add_executable(line_detector_node src/shape_detector_node.cpp)
+target_link_libraries(line_detector_node line_detector_lib)
+
 
 # catkin_add_gtest(${PROJECT_NAME}-test test/test_laser_line_extraction.cpp)
 install(TARGETS line_detector_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
 install(TARGETS line_extraction_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
-install(TARGETS line_extraction_ros line_extraction line ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION} LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION} RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION})
-
+install(TARGETS line_extraction_ros line_extraction line line_detector_lib ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION} LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION} RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION})
+install(DIRECTORY include/${PROJECT_NAME}/
+        DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+        FILES_MATCHING PATTERN "*.h"
+        )
 install(DIRECTORY launch/
         DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
         PATTERN ".svn" EXCLUDE)

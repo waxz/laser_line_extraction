@@ -9,6 +9,12 @@
 #include <thread>
 #include <iostream>
 #include <string>
+#include <ros/ros.h>
+#include <tf/tf.h>
+
+// if use threading tf pub
+// must include ros ,tf first
+
 
 
 using std::cout;
@@ -299,7 +305,7 @@ namespace threading_util {
         }
     };
 
-    template<class T, class F>
+    template<class F>
     class ThreadClass {
     public: // methods
         /** Constructor
@@ -314,9 +320,9 @@ namespace threading_util {
 
 
 
-
+        template<class T>
         void setTarget(T target, std::shared_ptr<F> arg);
-
+        template<class T>
         void setTarget(T target);
 
         void syncArg(F data);
@@ -350,15 +356,15 @@ namespace threading_util {
 
 
     //-----------------------------------------------------------------------------
-    template<class T, class F>
-    inline    ThreadClass<T,F>::ThreadClass(){
+    template<class F>
+    inline    ThreadClass<F>::ThreadClass(){
         cmd_ = std::make_shared<Cmd>(false);
         arg_ = std::make_shared<F>();
 
 
     } // Constructor
-    template<class T, class F>
-    inline    ThreadClass<T,F>::~ThreadClass() {
+    template<class F>
+    inline    ThreadClass<F>::~ThreadClass() {
         internalThread_.interrupt();
         // internalThread_.join(); // make damn sure that the internal thread is gone
         // before we destroy the class data.
@@ -367,24 +373,26 @@ namespace threading_util {
 
 
 
-    template<class T, class F>
-    void ThreadClass<T,F>::setTarget(T target, std::shared_ptr<F> arg) {
+    template<class F>
+    template<class T>
+    void ThreadClass<F>::setTarget(T target, std::shared_ptr<F> arg) {
         // this should always be the last line in the constructor
         // send data and cmd signal to thread
 
         internalThread_ = boost::thread(boost::bind<void>(target, arg, cmd_));
     }
 
-    template<class T, class F>
-    void ThreadClass<T,F>::setTarget(T target) {
+    template <class F>
+    template<class T>
+    void ThreadClass<F>::setTarget(T target) {
         // this should always be the last line in the constructor
         // send data and cmd signal to thread
 
         internalThread_ = boost::thread(boost::bind<void>(target, arg_, cmd_));
     }
 
-    template<class T, class F>
-    void ThreadClass<T,F>::syncArg(F data){
+    template<class F>
+    void ThreadClass<F>::syncArg(F data){
 
         std::swap(*arg_,data);
     }
@@ -395,10 +403,9 @@ namespace threading_util {
 //-----------------------------------------------------------------------------
 
 
-
+    template<class T>
     struct Func_tfb {
 
-        tf::TransformBroadcaster *tfb_;
         std::shared_ptr<tf::TransformBroadcaster> tfb_ptr_;
 
         int sleep_;
@@ -409,8 +416,8 @@ namespace threading_util {
         };
 
 
-        template<class T, class C>
-        void operator()(T data, C cmd) {
+        template<class C>
+        void operator()(std::shared_ptr<T> data, C cmd) {
             try {
                 /* add whatever code you want the thread to execute here. */
                 while (1) {
@@ -451,6 +458,56 @@ namespace threading_util {
         }
     };
 
+    template<class T>
+    struct Func_pub {
+
+        string topic_;
+
+        ros::Publisher pub_;
+        ros::NodeHandle nh_;
+
+        int sleep_;
+
+        Func_pub(double rate, string topic, ros::NodeHandle nh):topic_(topic), nh_(nh) {
+            pub_ = nh_.advertise<T>(topic_,1);
+            sleep_ = int(1000/rate);
+        };
+
+        template<class C>
+        void operator()(std::shared_ptr<T> data, C cmd) {
+            try {
+                /* add whatever code you want the thread to execute here. */
+                while (1) {
+                    if (!cmd.get()->run_) {
+//                        cout << "continue!!" << endl;
+                        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_));
+                        continue;
+                    }
+#if 1
+
+
+                    // read shared data in thread . make it thread safe
+                    T msg = *data;
+                    pub_.publish(msg);
+#endif
+                    std::this_thread::sleep_for(std::chrono::milliseconds(sleep_));
+
+                }
+
+            }
+            catch (boost::thread_interrupted &interruption) {
+                // thread was interrupted, this is expected.
+                cout << "******************thread was interrupted, this is expected." << endl;
+
+            }
+            catch (std::exception &e) {
+                // an unhandled exception reached this point, this constitutes an error
+                cout << "****************** an unhandled exception reached this point, this constitutes an error"
+                     << endl;
+
+            }
+        }
+    };
 
 }
 

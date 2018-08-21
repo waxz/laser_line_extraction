@@ -1,19 +1,11 @@
-#include "laser_line_extraction/line_extraction_ros.h"
-#include <cpp_utils/listener.h>
-#include <cpp_utils/time.h>
-#include <cpp_utils/geometry.h>
-#include <cpp_utils/container.h>
-#include <cpp_utils/levmarq.h>
-#include <cpp_utils/threading.h>
-#include <ros/console.h>
-#include <geometry_msgs/PoseArray.h>
+#include <laser_line_extraction/line_detector.h>
 
-#include <string>
 
 // get laser data
 // mask valid data
 // extract line
 // choose valid data
+#if 0
 class LineSegmentDetector:line_extraction::LineExtractionROS{
 protected:
     ros::NodeHandle nh_;
@@ -190,77 +182,156 @@ public:
 
 
 };
+#endif
+line_extraction::LineSegmentDetector::LineSegmentDetector(ros::NodeHandle nh, ros::NodeHandle nh_private):
+nh_(nh),
+nh_private_(nh_private),
+line_extraction::LineExtractionROS(nh, nh_private),
+listener(nh, nh_private){
+    initParam();
 
-// detect only one triangle
-// given relative position and shape
 
-// judge a line segment as triangle;
-// rule 1: length [0.05 , 0.2]
-// rule 2: angle [ -1, 1]
-// rule 3: distance [0.1, 4]
-// rule 5: pair angle [ pi*100/180, pi*150/180]
-// rule 6: pair intersection and distance to each end [0.15,0.25]
-// rule 7: pair intersection angle
+    auto res = listener.createSubcriber<sensor_msgs::LaserScan>(this->scan_topic_,1);
 
-struct SimpleShape{
-    std::vector<line_extraction::Line> lines;
-    type_util::Point2d intersect;
-    double intersect_angle;
+    scan_data_ = std::get<0>(res);
+//        listener.getOneMessage(scan_topic_,-1);
+
+
+}
+void line_extraction::LineSegmentDetector::initParam(){
+    nh_private_.param("max_range",max_range_,1.0);
+    nh_private_.param("min_angle",angle_min_,-0.5*M_PI);
+    nh_private_.param("max_angle",angle_max_,0.5*M_PI);
+
+
 };
+void line_extraction::LineSegmentDetector::processData(){
+    // mask ranges
+    // set range > max_range to 0
+    auto msg = *scan_data_;
 
-struct AngleCompare{
-    bool operator()(type_util::Point2d &v1, type_util::Point2d &v2){
-        return atan2(v1.y,v1.x) > atan2(v2.y,v2.x);
+    valarray<float> r = container_util::createValarrayFromVector(msg.ranges);
+    r[r>float(max_range_)] = 0.0;
+
+    // window mean filter
+#if 0
+
+    decltype(r) rL = r[std::slice(0,r.size()-1,1)];
+        decltype(r) rR = r[std::slice(1,r.size()-1,1)];
+        auto diff = rR - rL;
+        valarray<bool> maskContinous = (diff > 0.001f) && (diff < 0.05f) ;
+        valarray<bool> maskGap = (diff > 0.007f)  ;
+        valarray<int> ids = container_util::createRangeValarray(maskGap.size(),0);
+        valarray<int> maskids = ids[maskGap];
+        auto r_filtered = r;
+        r_filtered = 0f;
+        int widow = 2;
+
+        for(int i=0;i<maskids.size();i++){
+            int s,e;
+
+            // select start id and end id
+            if(i==0){
+                if(maskids[i]>2*widow){
+
+                }
+
+            }else if(i==maskids.size()-1){
+                if(maskids[i]>2*widow){
+
+                }
+            } else if(i>0 && i < maskids.size()){
+                if(maskids[i]>2*widow){
+
+                }
+            }
+        }
+
+#endif
+    msg.ranges = container_util::createVectorFromValarray(r);
+
+    boost::shared_ptr<sensor_msgs::LaserScan> scan_ptr_(boost::make_shared<sensor_msgs::LaserScan>(msg) );
+
+    this->laserScanCallback(scan_ptr_);
+}
+
+std::vector<line_extraction::Line> line_extraction::LineSegmentDetector::getLines(){
+    lines_.clear();
+
+    // todo:debug with block
+    bool getMsg;
+    if(debug_mode_){
+        getMsg = listener.getOneMessage(this->scan_topic_,-1);
+
+    }else{
+        getMsg = listener.getOneMessage(this->scan_topic_,0.05);
 
     }
-};
+    if (!getMsg){
+        std::cout<<std::endl;
 
-class SimpleTriangleDetector{
-protected:
-    ros::NodeHandle nh_;
-    ros::NodeHandle nh_private_;
-    LineSegmentDetector lsd_;
+        return lines_;
+    }
+    std::cout<<std::endl;
+    time_util::Timer timer;
+    timer.start();
 
-    // debug
-    geometry_msgs::PoseStamped targetPose_;
-    geometry_msgs::PoseArray targetPoints_;
 
-    ros::Publisher targetPub_;
-    ros::Publisher pointsPub_;
+    // process data
+    // get ptr from msg
+    // https://answers.ros.org/question/196697/get-constptr-from-message/
+    processData();
 
-    // cache
-    sensor_msgs::LaserScan latestScan_;
 
-    valarray<float> cache_cos_;
-    valarray<float> cache_sin_;
-    valarray<float> cache_angle_;
 
-    // param
-    double min_segLength_;
-    double max_segLength_;
-    double min_segAngle_;
-    double max_segAngle_;
-    double min_segDist_;
-    double max_segDist_;
+    // Extract the lines
+    this->line_extraction_.extractLines(lines_);
+    printf("get lines_ num = %d",int(lines_.size()));
+    timer.stop();
+    printf("time %.3f\n",timer.elapsedSeconds());
 
-    double min_shapeAngle_;
-    double max_shapeAngle_;
-    double min_pairInterLength_;
-    double max_pairInterLength_;
-    double min_pairInterAngle_;
-    double max_pairInterAngle_;
 
-    double min_grow_dist_;
-    double min_gap_dist_;
+    // Also publish markers if parameter publish_markers is set to true
+    if (this->pub_markers_)
+    {
+#if 0
+        pubMarkers(lines_);
+#endif
+    }
 
-    int filter_window_;
 
-    double max_fit_error_;
+    return lines_;
 
+}
+
+void line_extraction::LineSegmentDetector::pubMarkers(std::vector<line_extraction::Line> lines){
+    // Populate message
+    ROS_INFO("publish markers!!");
+    laser_line_extraction::LineSegmentList msg;
+    this->populateLineSegListMsg(lines, msg);
+    this->line_publisher_.publish(msg);
+    visualization_msgs::Marker marker_msg;
+    this->populateMarkerMsg(lines, marker_msg);
+    this->marker_publisher_.publish(marker_msg);
+
+
+}
+
+bool line_extraction::LineSegmentDetector::getLaser(sensor_msgs::LaserScan &scan){
+    scan = *scan_data_;
+    return (!scan.ranges.empty());
+}
+
+
+
+
+
+
+#if 1
 
 
     // method
-    void initParams(){
+    void line_extraction::SimpleTriangleDetector::initParams(){
         nh_private_.param("min_segLength",min_segLength_,0.1);
         nh_private_.param("max_segLength",max_segLength_,0.25);
         nh_private_.param("min_segAngle",min_segAngle_,-0.4*M_PI);
@@ -289,7 +360,7 @@ protected:
 
     };
 
-    void cacheData(){
+    void line_extraction::SimpleTriangleDetector::cacheData(){
         if ( latestScan_.ranges.size() == cache_angle_.size() && latestScan_.angle_min == cache_angle_[0]){
             return;
         }
@@ -302,7 +373,7 @@ protected:
 
     }
 
-    bool fitModel(vector<type_util::Point2d> & pointsInModel,double x0, double x1, double x2,geometry_msgs::PoseStamped & ModelPose){
+    bool line_extraction::SimpleTriangleDetector::fitModel(vector<type_util::Point2d> & pointsInModel,double x0, double x1, double x2,geometry_msgs::PoseStamped & ModelPose){
 
         targetPoints_.header = latestScan_.header;
         geometry_msgs::Pose pose;
@@ -387,8 +458,7 @@ protected:
 
 
 
-public:
-    SimpleTriangleDetector(ros::NodeHandle nh, ros::NodeHandle nh_private):
+    line_extraction::SimpleTriangleDetector::SimpleTriangleDetector(ros::NodeHandle nh, ros::NodeHandle nh_private):
             nh_(nh),
             nh_private_(nh_private),
             lsd_(nh,nh_private){
@@ -403,14 +473,14 @@ public:
 
     };
 
-    vector<geometry_msgs::PoseStamped> detect(){
+    vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::detect(){
         vector<geometry_msgs::PoseStamped> targets;
         // get lines
         auto lines = lsd_.getLines();
 
         // get pair
         int matchCnt = 0;
-        std::vector<SimpleShape> pairResults;
+        std::vector<line_extraction::SimpleShape> pairResults;
         for(int i=0;i<lines.size();i++){
             // calculate pair rule
             double length = lines[i].length();
@@ -464,7 +534,7 @@ public:
 
                         // publish
                         decltype(lines) selectLines = {l1,l2};
-                        SimpleShape shape;
+                        line_extraction::SimpleShape shape;
                         shape.lines = selectLines;
                         shape.intersect = intersect;
                         shape.intersect_angle = 0.5*(l2.getAngle() + l1.getAngle());
@@ -623,127 +693,88 @@ public:
 
     }
 
-};
 
-class TargetPublish{
-protected:
-    ros::NodeHandle nh_;
-    ros::NodeHandle nh_private_;
-
-    // detector
-    SimpleTriangleDetector sd_;
+#endif
 
 
 
 
-    // threading
-    std::shared_ptr<tf::StampedTransform> sharedTransform_ptr;
-    threading_util::ThreadClass<threading_util::Func_tfb, tf::StampedTransform> threadClass_;
-    threading_util::Func_tfb tfThread_;
-
-public:
-    TargetPublish(ros::NodeHandle nh, ros::NodeHandle nh_private):
+line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandle nh_private):
             nh_(nh),
             nh_private_(nh_private),
             sd_(nh,nh_private),
-            sharedTransform_ptr(),
-            tfThread_(10)
+            fake_pose_topic_("triangle_pose"),
+            pubThread_(20,fake_pose_topic_,nh),
+            tfThread_(20),
+            listener_(nh,nh_private)
     {
-        threadClass_.setTarget(tfThread_);
+        pubthreadClass_.setTarget(pubThread_);
+        tfthreadClass_.setTarget(tfThread_);
+
+        base_frame_id_ = "base_link";
+        laser_frame_id_ = "base_laser";
+        target_framde_id_ = "base_triangle";
+
+        fake_pose_topic_ = "triangle_pose";
+
+        baseToLaser_tf_.setIdentity();
+
+
+
+
 
 
 
     }
-    ~TargetPublish(){
-    }
-    void publish(){
+
+    void line_extraction::TargetPublish::publish(){
         auto targets = sd_.detect();
         if(targets.size() == 1){
+            // get base to laser tf
+#if 1
+            if(baseToLaser_tf_.getOrigin().x() == 0.0){
+                bool gettf = listener_.getTransform(base_frame_id_,laser_frame_id_,baseToLaser_tf_,ros::Time::now(),0.1,
+                                                    true);
+                if(!gettf){
+                    return;
+                }
+            }
+#endif
             // publish
             auto pose = targets[0];
 
-            string fixed_frame_id_, target_framde_id_;
-            fixed_frame_id_ = "base_laser";
-            target_framde_id_ = "base_triangle";
 
             //
             tf::Transform transform;
             tf::poseMsgToTF(pose.pose,transform);
+#if 1
+
             ros::Time tn = ros::Time::now();
             ros::Duration transform_tolerance;
             transform_tolerance.fromSec(0.1);
             ros::Time transform_expiration = (tn + transform_tolerance);
-            tf::StampedTransform stampedTransform = tf::StampedTransform(transform,
+            tf::StampedTransform stampedTransform = tf::StampedTransform(baseToLaser_tf_*transform,
                                                                        transform_expiration,
-                                                                       fixed_frame_id_, target_framde_id_);
-            threadClass_.syncArg(stampedTransform);
+                                                                       base_frame_id_, target_framde_id_);
+            tfthreadClass_.syncArg(stampedTransform);
+
+#endif
+            triangle_pose_.header.stamp = tn;
+            triangle_pose_.header.frame_id = target_framde_id_;
+            tf::poseTFToMsg((baseToLaser_tf_*transform).inverse(),triangle_pose_.pose);
+            pubthreadClass_.syncArg(triangle_pose_);
 
 
 
-
-            if (!threadClass_.isRunning()){
-                threadClass_.start();
+            if (!tfthreadClass_.isRunning()){
+                tfthreadClass_.start();
+            }
+            if (!pubthreadClass_.isRunning()){
+                pubthreadClass_.start();
             }
         }
 
     };
 
-};
 
-int main(int argc, char **argv)
-{
-#if 0
-    if (ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Debug))
-    {
-        ros::console::notifyLoggerLevelsChanged();
-    }
-#endif
-    ROS_DEBUG("Starting line_extraction_node.");
-
-    ros::init(argc, argv, "line_detector_node");
-    ros::NodeHandle nh;
-    ros::NodeHandle nh_local("~");
-
-    TargetPublish targetPub_(nh,nh_local);
-
-
-    double frequency;
-    nh_local.param<double>("frequency", frequency, 25);
-    ROS_DEBUG("Frequency set to %0.1f Hz", frequency);
-    ros::Rate rate(frequency);
-
-    bool debug_mode;
-    nh_local.param("debug",debug_mode, false);
-
-    // get data
-    // if successful
-    // extract line
-
-#if 0
-    SimpleTriangleDetector sd(nh,nh_local);
-#endif
-
-    time_util::Timer t;
-    while (ros::ok())
-    {
-        nh_local.param("debug",debug_mode, false);
-#if 0
-        LineSegmentDetector line_extractor(nh, nh_local);
-        line_extractor.getLines();
-#endif
-
-
-
-        t.start();
-        targetPub_.publish();
-#if 0
-        sd.detect();
-#endif
-
-        t.stop();
-        ROS_INFO("full time %.4f",t.elapsedSeconds());
-        rate.sleep();
-    }
-    return 0;
-}
 
