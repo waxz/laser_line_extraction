@@ -434,6 +434,7 @@ bool line_extraction::LineSegmentDetector::getLaser(sensor_msgs::LaserScan &scan
         targetPose_.pose.position.x = x(0);
         targetPose_.pose.position.y = x(1);
         targetPose_.pose.position.z = 0.0;
+        q = tf::createQuaternionFromYaw(x(2));
 
         targetPose_.pose.orientation.x = q.x();
         targetPose_.pose.orientation.y = q.y();
@@ -585,7 +586,7 @@ bool line_extraction::LineSegmentDetector::getLaser(sensor_msgs::LaserScan &scan
                 // grow to left
                 double dist ;
                 type_util::Point2d p;
-#if 0
+#if 1
 
                 for(int j = l1_idx[0];j>0;j--){
                     p.x = xs[j];
@@ -697,6 +698,9 @@ bool line_extraction::LineSegmentDetector::getLaser(sensor_msgs::LaserScan &scan
 #endif
 
 
+namespace line_extraction{
+
+}
 
 
 line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandle nh_private):
@@ -706,7 +710,8 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
             fake_pose_topic_("triangle_pose"),
             pubThread_(20,fake_pose_topic_,nh),
             tfThread_(20),
-            listener_(nh,nh_private)
+            listener_(nh,nh_private),
+            smoothPose_(10)
     {
         pubthreadClass_.setTarget(pubThread_);
         tfthreadClass_.setTarget(tfThread_);
@@ -718,6 +723,9 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
         fake_pose_topic_ = "triangle_pose";
 
         baseToLaser_tf_.setIdentity();
+
+        nh_private_.param("expire_sec",expire_sec_,5);
+        lastOkTime_ = ros::Time::now();
 
 
 
@@ -743,10 +751,24 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
             // publish
             auto pose = targets[0];
 
+            smoothPose_.update(pose.pose.position.x,pose.pose.position.y, tf::getYaw(pose.pose.orientation));
+
+#if 0
+
+            if (!smoothPose_.full()){
+               return;
+
+            }
+#endif
+            smoothPose_.getMean();
 
             //
             tf::Transform transform;
             tf::poseMsgToTF(pose.pose,transform);
+
+            transform.setRotation(tf::createQuaternionFromYaw(smoothPose_.mean_yaw_));
+            transform.setOrigin(tf::Vector3(smoothPose_.mean_x_,smoothPose_.mean_y_,0.0));
+
 #if 1
 
             ros::Time tn = ros::Time::now();
@@ -763,6 +785,7 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
             triangle_pose_.header.frame_id = target_framde_id_;
             tf::poseTFToMsg((baseToLaser_tf_*transform).inverse(),triangle_pose_.pose);
             pubthreadClass_.syncArg(triangle_pose_);
+            lastOkTime_ = tn;
 
 
 
@@ -772,6 +795,42 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
             if (!pubthreadClass_.isRunning()){
                 pubthreadClass_.start();
             }
+        }else{
+            if(!smoothPose_.full()){
+                return;
+            }
+            ros::Time tn = ros::Time::now();
+
+            auto dur = tn -lastOkTime_;
+            if(dur.sec<expire_sec_){
+                tf::Transform tranform_change,triangle_tf;
+                tranform_change.setIdentity();
+                bool get = listener_.getTransformChange("odom",base_frame_id_,tranform_change,
+                                             triangle_pose_.header.stamp,tn,0.1,false);
+
+
+                tf::poseMsgToTF(triangle_pose_.pose,triangle_tf);
+                tf::poseTFToMsg(triangle_tf*tranform_change,triangle_pose_.pose);
+                triangle_pose_.header.stamp = tn;
+                pubthreadClass_.syncArg(triangle_pose_);
+
+            }else{
+                smoothPose_.clear();
+                pubthreadClass_.pause();
+            };
+
+
+
+
+
+
+#if 0
+            smoothPose_.clear();
+            triangle_pose_.pose.position.x = 100000;
+            triangle_pose_.pose.position.y = 100000;
+
+            pubthreadClass_.syncArg(triangle_pose_);
+#endif
         }
 
     };

@@ -34,6 +34,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   tf
   visualization_msgs
+
 )
 
 find_package(Eigen REQUIRED)

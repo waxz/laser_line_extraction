@@ -92,6 +92,8 @@ namespace rosnode {
         bool getTransform(string fix_frame, string target_frame, tf::Transform &transform,
                           ros::Time time = ros::Time::now(), double sleep_duration = 0.1, bool block = false);
 
+        bool getTransformChange(string fix_frame, string target_frame, tf::Transform &transform,
+                                ros::Time last_time, ros::Time query_time, double sleep_duration = 0.1, bool block = false);
         void sendTransform(string fix_frame, string target_frame, tf::Transform &transform, double tolerance = 0.1);
 
         template<class T>
@@ -341,6 +343,17 @@ namespace rosnode {
         tf::poseTFToMsg(transform, p);
         return successful;
     }
+
+    bool Listener::getTransformChange(string fix_frame, string target_frame, tf::Transform &transform,
+                                      ros::Time last_time, ros::Time query_time, double sleep_duration, bool block) {
+
+        bool successful = tf_util::lookupTranformChange(tf_,last_time,query_time,fix_frame,target_frame, transform,
+        sleep_duration,block);
+        geometry_msgs::Pose p;
+        tf::poseTFToMsg(transform, p);
+        return successful;
+    }
+
 
     inline void
     Listener::sendTransform(string fix_frame, string target_frame, tf::Transform &transform, double tolerance) {

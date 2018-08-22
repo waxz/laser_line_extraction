@@ -1,6 +1,6 @@
 <launch>
     <node name="line_detector_node" pkg="laser_line_extraction" type="line_detector_node">
-        <param name="~frequency" value="25.0" />
+        <param name="~frequency" value="20.0" />
         <param name="~frame_id" value="base_laser" />
         <param name="~scan_topic" value="scan_filtered" />
         <param name="~publish_markers" value="true" />
@@ -44,6 +44,7 @@
         <param name="max_fit_error" value="0.01"/>
 
 
+        <param name="expire_sec" value="10"/>
 
     </node>
 </launch>

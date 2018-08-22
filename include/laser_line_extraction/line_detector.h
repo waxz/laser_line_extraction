@@ -142,6 +142,59 @@ namespace line_extraction{
     };
 
 
+    struct smoothPose{
+        int cnt_;
+        int num_;
+        valarray<double> xs_;
+        valarray<double> ys_;
+        valarray<double> yaws_;
+
+        double mean_x_;
+        double mean_y_;
+        double mean_yaw_;
+
+        smoothPose(int cnt):
+                cnt_(cnt),xs_(cnt), ys_(cnt),yaws_(cnt_){
+            num_ = 0;
+        }
+
+        void update(double x, double y, double yaw){
+            if(num_ == cnt_-1){
+                xs_ = xs_.cshift(1);
+                ys_ = ys_.cshift(1);
+                yaws_ = yaws_.cshift(1);
+            }
+            xs_[num_] = x;
+            ys_[num_] = y;
+            yaws_[num_] = yaw;
+
+            if(num_ < cnt_-1){
+                num_++;
+
+            }
+        }
+        void getMean(){
+            mean_x_ = xs_.sum()/xs_.size();
+            mean_y_ = ys_.sum()/ys_.size();
+            mean_yaw_ = yaws_.sum()/yaws_.size();
+
+        }
+
+        bool full(){
+            return num_==cnt_-1;
+        }
+
+        void clear(){
+            smoothPose newpose(this->cnt_);
+            this->xs_ = newpose.xs_;
+            this->ys_ = newpose.ys_;
+            this->yaws_ = newpose.yaws_;
+            this->num_ = 0;
+
+        }
+
+    };
+
     class TargetPublish {
     protected:
         ros::NodeHandle nh_;
@@ -162,9 +215,13 @@ namespace line_extraction{
 
         string fake_pose_topic_;
 
+        ros::Time lastOkTime_;
+        int expire_sec_;
 
         tf::Transform baseToLaser_tf_;
         geometry_msgs::PoseStamped triangle_pose_;
+
+        line_extraction::smoothPose smoothPose_;
 
 
         // threading
@@ -179,6 +236,9 @@ namespace line_extraction{
 
 
     };
+
+
+
 
 }
 
