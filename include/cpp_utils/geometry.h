@@ -56,7 +56,7 @@ namespace geometry_util{
             return false;
 
         }
-        cout<<"Ok, get intersection: "<<ixOut<<","<<iyOut<<endl;
+//        cout<<"Ok, get intersection: "<<ixOut<<","<<iyOut<<endl;
 
 
         return true; //All OK

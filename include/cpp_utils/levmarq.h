@@ -259,6 +259,101 @@ namespace opt_util {
 
     };
 
+    struct VFunctor : SimpleFunctor {
+        // define model param
+        bool modelUpdated_;
+
+        VFunctor() {
+            modelUpdated_ = false;
+        }
+
+        //update model param
+        void updataModel(const Eigen::VectorXd &model) {
+            modelUpdated_ = true;
+        }
+
+        // predict
+        int operator()(const Eigen::VectorXd &x, Eigen::VectorXd &fvec) const {
+            // 'x' has dimensions n x 1
+            // It contains the current estimates for the parameters.
+
+            // 'fvec' has dimensions m x 1
+            // It will contain the error for each data point.
+
+            double x0 = x(0);
+            double y0 = x(1);
+            double yaw0 = x(2);
+            double angle = x(3);
+            double k1, k2;
+
+            double turnAngle = 0.25*M_PI;//paramAngle_ - 0.5*M_PI;
+
+            double angle_1, angle_2;
+
+
+            // fix: assuption error ,the model may be   x = f(y)
+            // or y = f(x)
+
+            double inputValue , predictValue;
+            // x = f(y)
+            if(fabs(yaw0)<=turnAngle || fabs(yaw0 - M_PI)<=turnAngle){
+                if(fabs(yaw0)<0.5*M_PI){
+                    angle_1 = yaw0 + 0.5 * angle;
+                    angle_2 = yaw0  - 0.5 * angle;
+                }else if(fabs(yaw0)>0.5*M_PI){
+                    angle_1 = yaw0 - 0.5 * angle;
+                    angle_2 = yaw0  + 0.5 * angle;
+                }
+                k1 = tan(angle_1);
+                k2 = tan(angle_2);
+
+
+
+
+
+                for (int i = 0; i < values(); i++) {
+                    inputValue = measuredValues(i, 1);
+                    predictValue = measuredValues(i, 0);
+
+                    // error = y_true - y_predict
+                    fvec(i) = predictValue - ((inputValue < y0) ? x0 + (inputValue - y0) / k1 : x0 + (inputValue - y0) / k2);
+//                    fvec(i) = (inputValue < y0) ? predictValue - (x0 + (inputValue - y0) / k1)*fabs(sin(angle_1)) : predictValue - (x0 + (inputValue - y0) / k2)*fabs(sin(angle_2));
+
+                }
+            } else {
+                // y = f(x)
+                if(yaw0 > turnAngle){
+                    angle_1 = yaw0 - 0.5 * angle;
+                    angle_2 = yaw0  + 0.5 * angle;
+                } else if(yaw0 < -turnAngle){
+                    angle_1 = yaw0 + 0.5 * angle;
+                    angle_2 = yaw0  - 0.5 * angle;
+                }
+                k1 = tan(angle_1);
+                k2 = tan(angle_2);
+
+
+                for (int i = 0; i < values(); i++){
+                    inputValue = measuredValues(i, 0);
+                    predictValue = measuredValues(i, 1);
+
+                    // error = y_true - y_predict
+                    fvec(i) = predictValue - ((inputValue < x0) ? y0 + (inputValue - x0) * k1 : y0 + (inputValue - x0) * k2);
+//                    fvec(i) = (inputValue < x0) ? (predictValue - (y0 + (inputValue - x0) * k1))*fabs(cos(angle_1)) : (predictValue - (y0 + (inputValue - x0) * k2))*fabs(cos(angle_2));
+
+                }
+
+
+            }
+
+
+
+
+            return 0;
+        }
+
+
+    };
 
 }
 

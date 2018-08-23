@@ -10,6 +10,7 @@
 #include <tf/tf.h>
 #include <tf/transform_broadcaster.h>
 
+#include <geometry_msgs/Pose.h>
 #include <sensor_msgs/PointCloud.h>
 #include <vector>
 #include <string>
@@ -65,6 +66,16 @@ namespace tf_util {
                                                 createVector3FromTranslation(translation));
         return transform;
     }
+
+    geometry_msgs::Pose createPoseFromXYYaw(double x,double y, double yaw){
+        geometry_msgs::Pose pose;
+        pose.position.x = x;
+        pose.position.y = y;
+        pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0.0,0.0,yaw);
+
+        return pose;
+    }
+
 
 
 
