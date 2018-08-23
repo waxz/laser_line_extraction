@@ -376,8 +376,8 @@ bool line_extraction::LineSegmentDetector::getLaser(sensor_msgs::LaserScan &scan
     bool line_extraction::SimpleTriangleDetector::fitModel(vector<type_util::Point2d> & pointsInModel,double x0, double x1, double x2,geometry_msgs::PoseStamped & ModelPose){
 
         targetPoints_.header = latestScan_.header;
-        geometry_msgs::Pose pose;
-
+        geometry_msgs::Pose pose = tf_util::createPoseFromXYYaw(0.0,0.0,x2);
+#if 0
         auto q = tf::createQuaternionFromYaw(x2);
 
         pose.orientation.x = q.x();
@@ -385,7 +385,7 @@ bool line_extraction::LineSegmentDetector::getLaser(sensor_msgs::LaserScan &scan
         pose.orientation.z = q.z();
         pose.orientation.w = q.w();
 
-
+#endif
 
         // convert points to Eigen
         int m = pointsInModel.size();
@@ -400,26 +400,27 @@ bool line_extraction::LineSegmentDetector::getLaser(sensor_msgs::LaserScan &scan
             targetPoints_.poses.push_back(pose);
         }
 
-        Eigen::VectorXd x(3);
+        Eigen::VectorXd x(4);
         decltype(x) model(1);
 
         x(0) = x0;             // initial value for 'a'
         x(1) = x1;             // initial value for 'b'
         x(2) = x2;             // initial value for 'c'
-        model(0) =  M_PI*120.0/180.0;
+        x(3) =  M_PI*120.0/180.0;
         ROS_INFO_STREAM("get init result \n"<<x);
 
 #if 1
 
-        opt_util::SimpleSolver<opt_util::LineFunctor> sm;
-        sm.updataModel(model);
+        opt_util::SimpleSolver<opt_util::VFunctor> sm;
+//        sm.updataModel(model);
         sm.setParams(x);
         sm.feedData(measuredValues);
         int status = sm.solve();
         auto meanerror = sm.getMeanError();
-        ROS_INFO_STREAM("get optimize result \n"<<x<<"\nmean error"<<meanerror);
 
         // check fit error and
+        ROS_INFO_STREAM("get optimize result \n"<<sm.getParam()<<"mean error"<<meanerror);
+
         if(meanerror < max_fit_error_){
             x = sm.getParam();
 
@@ -430,6 +431,8 @@ bool line_extraction::LineSegmentDetector::getLaser(sensor_msgs::LaserScan &scan
 
 #endif
         targetPose_.header = latestScan_.header;
+        targetPose_.pose = tf_util::createPoseFromXYYaw(x(0),x(1),x(2));
+#if 0
 
         targetPose_.pose.position.x = x(0);
         targetPose_.pose.position.y = x(1);
@@ -440,7 +443,7 @@ bool line_extraction::LineSegmentDetector::getLaser(sensor_msgs::LaserScan &scan
         targetPose_.pose.orientation.y = q.y();
         targetPose_.pose.orientation.z = q.z();
         targetPose_.pose.orientation.w = q.w();
-
+#endif
 
 
 
@@ -500,6 +503,7 @@ bool line_extraction::LineSegmentDetector::getLaser(sensor_msgs::LaserScan &scan
 
             // calculate pair rule
             if(matchCnt == 2){
+                matchCnt =0;
                 // get intersection
                 auto l1 = lines[i-1];
                 auto l2 = lines[i];
@@ -513,8 +517,15 @@ bool line_extraction::LineSegmentDetector::getLaser(sensor_msgs::LaserScan &scan
 
                 if(succ){
                     // if match rule
+                    ROS_INFO("get line \n1 =[%.3f,%.3f],[%.3f,%.3f]\n2 = [%.3f,%.3f],[%.3f,%.3f]\ni = [%.3f,%.3f]",
+                             l1_s.x, l1_s.y,l1_e.x,l1_e.y,l2_s.x,l2_s.y,l2_e.x,l2_e.y,intersect.x,intersect.y);
 
 
+                    double gap_dist = geometry_util::PointToPointDistance(l1_e,l2_s);
+                    bool cond8 = gap_dist<0.5*min_segLength_;
+                    if(!cond8){
+                        continue;
+                    }
                     double shapeAngle = M_PI - (l2.getAngle() - l1.getAngle());
                     bool cond4 = shapeAngle > min_shapeAngle_ && shapeAngle < max_shapeAngle_;
                     double intersectAngle = atan2(intersect.y,intersect.x);
@@ -529,7 +540,8 @@ bool line_extraction::LineSegmentDetector::getLaser(sensor_msgs::LaserScan &scan
                             intersectLen2 > min_pairInterLength_ &&
                             intersectLen2 < max_pairInterLength_;
 
-                    if (cond4 && cond5 && cond6 && cond7){
+
+                    if (cond4 && cond5 && cond6 && cond7&&cond8){
                         //get pair
 
 
@@ -739,10 +751,10 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
         auto targets = sd_.detect();
         if(targets.size() == 1){
             // get base to laser tf
-#if 1
+#if 0
             if(baseToLaser_tf_.getOrigin().x() == 0.0){
                 bool gettf = listener_.getTransform(base_frame_id_,laser_frame_id_,baseToLaser_tf_,ros::Time::now(),0.1,
-                                                    true);
+                                                    false);
                 if(!gettf){
                     return;
                 }
