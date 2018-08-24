@@ -5,184 +5,7 @@
 // mask valid data
 // extract line
 // choose valid data
-#if 0
-class LineSegmentDetector:line_extraction::LineExtractionROS{
-protected:
-    ros::NodeHandle nh_;
-    ros::NodeHandle nh_private_;
 
-    // topic sub
-    rosnode::Listener listener;
-
-    //shared data
-    std::shared_ptr<sensor_msgs::LaserScan> scan_data_;
-
-
-
-
-    // parameter
-    double range_min_;
-    double max_range_;
-    double angle_min_;
-    double angle_max_;
-
-    bool debug_mode_;
-
-
-    //result
-    std::vector<line_extraction::Line> lines_;
-
-
-
-
-    // method
-    void initParam(){
-        nh_private_.param("max_range",max_range_,1.0);
-        nh_private_.param("min_angle",angle_min_,-0.5*M_PI);
-        nh_private_.param("max_angle",angle_max_,0.5*M_PI);
-
-
-    };
-
-    void processData(){
-        // mask ranges
-        // set range > max_range to 0
-        auto msg = *scan_data_;
-
-        valarray<float> r = container_util::createValarrayFromVector(msg.ranges);
-        r[r>float(max_range_)] = 0.0;
-
-        // window mean filter
-#if 0
-
-        decltype(r) rL = r[std::slice(0,r.size()-1,1)];
-        decltype(r) rR = r[std::slice(1,r.size()-1,1)];
-        auto diff = rR - rL;
-        valarray<bool> maskContinous = (diff > 0.001f) && (diff < 0.05f) ;
-        valarray<bool> maskGap = (diff > 0.007f)  ;
-        valarray<int> ids = container_util::createRangeValarray(maskGap.size(),0);
-        valarray<int> maskids = ids[maskGap];
-        auto r_filtered = r;
-        r_filtered = 0f;
-        int widow = 2;
-
-        for(int i=0;i<maskids.size();i++){
-            int s,e;
-
-            // select start id and end id
-            if(i==0){
-                if(maskids[i]>2*widow){
-
-                }
-
-            }else if(i==maskids.size()-1){
-                if(maskids[i]>2*widow){
-
-                }
-            } else if(i>0 && i < maskids.size()){
-                if(maskids[i]>2*widow){
-
-                }
-            }
-        }
-
-#endif
-        msg.ranges = container_util::createVectorFromValarray(r);
-
-        boost::shared_ptr<sensor_msgs::LaserScan> scan_ptr_(boost::make_shared<sensor_msgs::LaserScan>(msg) );
-
-        this->laserScanCallback(scan_ptr_);
-    }
-
-
-public:
-    LineSegmentDetector(ros::NodeHandle nh, ros::NodeHandle nh_private):
-    nh_(nh),
-    nh_private_(nh_private),
-    line_extraction::LineExtractionROS(nh, nh_private),
-    listener(nh, nh_private){
-        initParam();
-
-
-        auto res = listener.createSubcriber<sensor_msgs::LaserScan>(this->scan_topic_,1);
-
-        scan_data_ = std::get<0>(res);
-//        listener.getOneMessage(scan_topic_,-1);
-
-
-    }
-    std::vector<line_extraction::Line> getLines(){
-        lines_.clear();
-
-        // todo:debug with block
-        bool getMsg;
-        if(debug_mode_){
-            getMsg = listener.getOneMessage(this->scan_topic_,-1);
-
-        }else{
-            getMsg = listener.getOneMessage(this->scan_topic_,0.01);
-
-        }
-        if (!getMsg){
-            std::cout<<std::endl;
-
-            return lines_;
-        }
-        std::cout<<std::endl;
-        time_util::Timer timer;
-        timer.start();
-
-
-        // process data
-        // get ptr from msg
-        // https://answers.ros.org/question/196697/get-constptr-from-message/
-        processData();
-
-
-
-        // Extract the lines
-        this->line_extraction_.extractLines(lines_);
-        printf("get lines_ num = %d",int(lines_.size()));
-        timer.stop();
-        printf("time %.3f\n",timer.elapsedSeconds());
-
-
-        // Also publish markers if parameter publish_markers is set to true
-        if (this->pub_markers_)
-        {
-#if 0
-            pubMarkers(lines_);
-#endif
-        }
-
-
-        return lines_;
-
-    }
-
-    void pubMarkers(std::vector<line_extraction::Line> lines){
-        // Populate message
-        ROS_INFO("publish markers!!");
-        laser_line_extraction::LineSegmentList msg;
-        this->populateLineSegListMsg(lines, msg);
-        this->line_publisher_.publish(msg);
-        visualization_msgs::Marker marker_msg;
-        this->populateMarkerMsg(lines, marker_msg);
-        this->marker_publisher_.publish(marker_msg);
-
-
-    }
-
-    bool getLaser(sensor_msgs::LaserScan &scan){
-        scan = *scan_data_;
-        return (!scan.ranges.empty());
-    }
-
-
-
-
-};
-#endif
 line_extraction::LineSegmentDetector::LineSegmentDetector(ros::NodeHandle nh, ros::NodeHandle nh_private):
 nh_(nh),
 nh_private_(nh_private),
@@ -213,41 +36,7 @@ void line_extraction::LineSegmentDetector::processData(){
     valarray<float> r = container_util::createValarrayFromVector(msg.ranges);
     r[r>float(max_range_)] = 0.0;
 
-    // window mean filter
-#if 0
 
-    decltype(r) rL = r[std::slice(0,r.size()-1,1)];
-        decltype(r) rR = r[std::slice(1,r.size()-1,1)];
-        auto diff = rR - rL;
-        valarray<bool> maskContinous = (diff > 0.001f) && (diff < 0.05f) ;
-        valarray<bool> maskGap = (diff > 0.007f)  ;
-        valarray<int> ids = container_util::createRangeValarray(maskGap.size(),0);
-        valarray<int> maskids = ids[maskGap];
-        auto r_filtered = r;
-        r_filtered = 0f;
-        int widow = 2;
-
-        for(int i=0;i<maskids.size();i++){
-            int s,e;
-
-            // select start id and end id
-            if(i==0){
-                if(maskids[i]>2*widow){
-
-                }
-
-            }else if(i==maskids.size()-1){
-                if(maskids[i]>2*widow){
-
-                }
-            } else if(i>0 && i < maskids.size()){
-                if(maskids[i]>2*widow){
-
-                }
-            }
-        }
-
-#endif
     msg.ranges = container_util::createVectorFromValarray(r);
 
     boost::shared_ptr<sensor_msgs::LaserScan> scan_ptr_(boost::make_shared<sensor_msgs::LaserScan>(msg) );
@@ -503,7 +292,7 @@ bool line_extraction::LineSegmentDetector::getLaser(sensor_msgs::LaserScan &scan
 
             // calculate pair rule
             if(matchCnt == 2){
-                matchCnt =0;
+                matchCnt =1;
                 // get intersection
                 auto l1 = lines[i-1];
                 auto l2 = lines[i];
