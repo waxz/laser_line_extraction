@@ -83,7 +83,7 @@ std::vector<line_extraction::Line> line_extraction::LineSegmentDetector::getLine
     // Also publish markers if parameter publish_markers is set to true
     if (this->pub_markers_)
     {
-#if 0
+#if 1
         pubMarkers(lines_);
 #endif
     }
@@ -143,7 +143,10 @@ bool line_extraction::LineSegmentDetector::getLaser(sensor_msgs::LaserScan &scan
         nh_private_.param("filter_window",filter_window_,4);
 
         nh_private_.param("max_fit_error",max_fit_error_, 0.01);
+        nh_private_.param("triangle_direction",triangle_direction_, -1.0);
 
+
+        //triangle_direction
 
 
 
@@ -196,12 +199,13 @@ bool line_extraction::LineSegmentDetector::getLaser(sensor_msgs::LaserScan &scan
         x(1) = x1;             // initial value for 'b'
         x(2) = x2;             // initial value for 'c'
         x(3) =  M_PI*120.0/180.0;
+        model(0) = triangle_direction_;
         ROS_INFO_STREAM("get init result \n"<<x);
 
 #if 1
 
         opt_util::SimpleSolver<opt_util::VFunctor> sm;
-//        sm.updataModel(model);
+        sm.updataModel(model);
         sm.setParams(x);
         sm.feedData(measuredValues);
         int status = sm.solve();
@@ -315,7 +319,7 @@ bool line_extraction::LineSegmentDetector::getLaser(sensor_msgs::LaserScan &scan
                     if(!cond8){
                         continue;
                     }
-                    double shapeAngle = M_PI - (l2.getAngle() - l1.getAngle());
+                    double shapeAngle = M_PI - triangle_direction_*(l2.getAngle() - l1.getAngle());
                     bool cond4 = shapeAngle > min_shapeAngle_ && shapeAngle < max_shapeAngle_;
                     double intersectAngle = atan2(intersect.y,intersect.x);
                     bool cond5 = intersectAngle > min_pairInterAngle_ && intersectAngle < max_pairInterAngle_;
@@ -509,7 +513,7 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
             nh_private_(nh_private),
             sd_(nh,nh_private),
             fake_pose_topic_("triangle_pose"),
-            pubThread_(20,fake_pose_topic_,nh),
+            pubThread_(50,fake_pose_topic_,nh),
             tfThread_(20),
             listener_(nh,nh_private),
             smoothPose_(10)
@@ -528,6 +532,9 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
         nh_private_.param("expire_sec",expire_sec_,5);
         lastOkTime_ = ros::Time::now();
 
+        nh_private_.param("broadcast_tf",broadcast_tf_, false);
+        nh_private_.param("pub_pose",pub_pose_, true);
+
 
 
 
@@ -539,8 +546,8 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
     void line_extraction::TargetPublish::publish(){
         auto targets = sd_.detect();
         if(targets.size() == 1){
-            // get base to laser tf
-#if 0
+            // todo : bypass in debug model ;get base to laser tf
+#if 1
             if(baseToLaser_tf_.getOrigin().x() == 0.0){
                 bool gettf = listener_.getTransform(base_frame_id_,laser_frame_id_,baseToLaser_tf_,ros::Time::now(),0.1,
                                                     false);
@@ -590,10 +597,10 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
 
 
 
-            if (!tfthreadClass_.isRunning()){
+            if ( broadcast_tf_&&!tfthreadClass_.isRunning()){
                 tfthreadClass_.start();
             }
-            if (!pubthreadClass_.isRunning()){
+            if (pub_pose_&&!pubthreadClass_.isRunning()){
                 pubthreadClass_.start();
             }
         }else{
@@ -603,7 +610,7 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
             ros::Time tn = ros::Time::now();
 
             auto dur = tn -lastOkTime_;
-            if(dur.sec<expire_sec_){
+            if(dur.toSec()<expire_sec_){
                 tf::Transform tranform_change,triangle_tf;
                 tranform_change.setIdentity();
                 bool get = listener_.getTransformChange("odom",base_frame_id_,tranform_change,

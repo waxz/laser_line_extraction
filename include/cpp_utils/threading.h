@@ -11,6 +11,7 @@
 #include <string>
 #include <ros/ros.h>
 #include <tf/tf.h>
+#include "tf.h"
 
 // if use threading tf pub
 // must include ros ,tf first
@@ -508,6 +509,75 @@ namespace threading_util {
             }
         }
     };
+
+    template<class T>
+    struct Func_tfsync {
+
+        std::shared_ptr<tf::TransformBroadcaster> tfb_ptr_;
+        std::shared_ptr<tf::TransformListener> tfl_ptr_;
+
+        int sleep_;
+
+        Func_tfsync(double rate = 10) {
+            tfb_ptr_ = std::make_shared<tf::TransformBroadcaster>();
+            tfl_ptr_ = std::make_shared<tf::TransformListener>();
+            sleep_ = int(1000/rate);
+        };
+
+
+        template<class C>
+        void operator()(std::shared_ptr<T> data, C cmd) {
+            try {
+                /* add whatever code you want the thread to execute here. */
+                while (1) {
+                    if (!cmd.get()->run_) {
+//                        cout << "continue!!" << endl;
+                        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_));
+                        continue;
+                    }
+                    ros::Time tn = ros::Time::now();
+
+                    // lookup and broadcast
+                    string fixed_frame_id_ = "base_triangle";
+                    string base_frame_id_ = "base_link";
+
+                    string base_frame_ekf_id_ = "base_link";
+                    tf::Transform transform;
+                    bool succ = tf_util::lookupTransform(tfl_ptr_.get(),fixed_frame_id_,base_frame_ekf_id_,transform,tn,0.01,false);
+                    if(!succ)
+                        continue;
+
+
+#if 1
+//                    cout << "pub ====" << data.get()->stamp_ << endl;
+                    // update time in thread
+                    ros::Duration transform_tolerance;
+                    transform_tolerance.fromSec(0.1);
+                    ros::Time transform_expiration = (tn + transform_tolerance);
+
+                    // read shared data in thread . make it thread safe
+                    tf::StampedTransform msg = tf::StampedTransform(transform.inverse(),transform_expiration,base_frame_id_,fixed_frame_id_);
+                    (*tfb_ptr_).sendTransform(msg);
+#endif
+                    std::this_thread::sleep_for(std::chrono::milliseconds(sleep_));
+
+                }
+
+            }
+            catch (boost::thread_interrupted &interruption) {
+                // thread was interrupted, this is expected.
+                cout << "******************thread was interrupted, this is expected." << endl;
+
+            }
+            catch (std::exception &e) {
+                // an unhandled exception reached this point, this constitutes an error
+                cout << "****************** an unhandled exception reached this point, this constitutes an error"
+                     << endl;
+
+            }
+        }
+    };
+
 
 }
 

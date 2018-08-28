@@ -262,14 +262,17 @@ namespace opt_util {
     struct VFunctor : SimpleFunctor {
         // define model param
         bool modelUpdated_;
+        double direction_;
 
-        VFunctor() {
+        VFunctor(int direction = 1) {
             modelUpdated_ = false;
+            direction_ = direction;
         }
 
         //update model param
         void updataModel(const Eigen::VectorXd &model) {
             modelUpdated_ = true;
+            direction_ = model(0);
         }
 
         // predict
@@ -298,11 +301,11 @@ namespace opt_util {
             // x = f(y)
             if(fabs(yaw0)<=turnAngle || fabs(yaw0 - M_PI)<=turnAngle){
                 if(fabs(yaw0)<0.5*M_PI){
-                    angle_1 = yaw0 + 0.5 * angle;
-                    angle_2 = yaw0  - 0.5 * angle;
+                    angle_1 = yaw0 + 0.5 * angle*direction_;
+                    angle_2 = yaw0  - 0.5 * angle*direction_;
                 }else if(fabs(yaw0)>0.5*M_PI){
-                    angle_1 = yaw0 - 0.5 * angle;
-                    angle_2 = yaw0  + 0.5 * angle;
+                    angle_1 = yaw0 - 0.5 * angle*direction_;
+                    angle_2 = yaw0  + 0.5 * angle*direction_;
                 }
                 k1 = tan(angle_1);
                 k2 = tan(angle_2);
@@ -323,11 +326,11 @@ namespace opt_util {
             } else {
                 // y = f(x)
                 if(yaw0 > turnAngle){
-                    angle_1 = yaw0 - 0.5 * angle;
-                    angle_2 = yaw0  + 0.5 * angle;
+                    angle_1 = yaw0 - 0.5 * angle*direction_;
+                    angle_2 = yaw0  + 0.5 * angle*direction_;
                 } else if(yaw0 < -turnAngle){
-                    angle_1 = yaw0 + 0.5 * angle;
-                    angle_2 = yaw0  - 0.5 * angle;
+                    angle_1 = yaw0 + 0.5 * angle*direction_;
+                    angle_2 = yaw0  - 0.5 * angle*direction_;
                 }
                 k1 = tan(angle_1);
                 k2 = tan(angle_2);

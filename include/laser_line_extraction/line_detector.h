@@ -127,6 +127,8 @@ namespace line_extraction{
 
         double max_fit_error_;
 
+        double triangle_direction_;
+
         // method
         void initParams();
 
@@ -217,6 +219,11 @@ namespace line_extraction{
 
         ros::Time lastOkTime_;
         int expire_sec_;
+
+
+        bool broadcast_tf_;
+
+        bool pub_pose_;
 
         tf::Transform baseToLaser_tf_;
         geometry_msgs::PoseStamped triangle_pose_;
