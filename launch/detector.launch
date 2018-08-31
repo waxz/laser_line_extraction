@@ -65,11 +65,11 @@
         <param name="max_fit_error" value="0.01"/>
 
 
-        <param name="expire_sec" value="10"/>
+        <param name="expire_sec" value="30"/>
 
         <param name="broadcast_tf" value="false"/>
         <param name="pub_pose" value="true"/>
-        <param name="triangle_direction" value="-1"/>
+        <param name="triangle_direction" value="1"/>
 
     </node>
 

@@ -14,6 +14,7 @@
 #include <ros/console.h>
 #include <geometry_msgs/PoseArray.h>
 #include <geometry_msgs/PointStamped.h>
+#include <std_msgs/String.h>
 
 #include <string>
 
@@ -216,6 +217,13 @@ namespace line_extraction{
 
 
         string fake_pose_topic_;
+
+        string cmd_topic_;
+
+        std::shared_ptr<std_msgs::String> cmd_data_ptr_;
+
+        bool running_;
+
 
         ros::Time lastOkTime_;
         int expire_sec_;

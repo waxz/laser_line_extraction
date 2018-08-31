@@ -516,7 +516,8 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
             pubThread_(50,fake_pose_topic_,nh),
             tfThread_(20),
             listener_(nh,nh_private),
-            smoothPose_(10)
+            smoothPose_(10),
+            cmd_data_ptr_(std::make_shared<std_msgs::String>())
     {
         pubthreadClass_.setTarget(pubThread_);
         tfthreadClass_.setTarget(tfThread_);
@@ -527,6 +528,8 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
 
         fake_pose_topic_ = "triangle_pose";
 
+        cmd_topic_ = "waypoint_user_pub";
+
         baseToLaser_tf_.setIdentity();
 
         nh_private_.param("expire_sec",expire_sec_,5);
@@ -534,6 +537,11 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
 
         nh_private_.param("broadcast_tf",broadcast_tf_, false);
         nh_private_.param("pub_pose",pub_pose_, true);
+
+        auto res = listener_.createSubcriber<std_msgs::String>(cmd_topic_,1);
+        cmd_data_ptr_ = std::get<0>(res);
+
+        running_ = false;
 
 
 
@@ -544,6 +552,22 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
     }
 
     void line_extraction::TargetPublish::publish(){
+        // how to change state
+        if(!running_){
+
+            bool getmsg = listener_.getOneMessage(cmd_topic_,0.1);
+
+            if(getmsg){
+                if(cmd_data_ptr_.get()->data == "dock"){
+                    running_ = true;
+                    lastOkTime_ = ros::Time::now();
+                }
+
+            }
+            return;
+        }
+
+
         auto targets = sd_.detect();
         if(targets.size() == 1){
             // todo : bypass in debug model ;get base to laser tf
@@ -625,6 +649,7 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
             }else{
                 smoothPose_.clear();
                 pubthreadClass_.pause();
+                running_ = false;
             };
 
 
