@@ -95,7 +95,7 @@ public:
         odom_.header.stamp = ros::Time::now();
 
         outOdomPub_.publish(odom_);
-        ROS_INFO_STREAM("pub odom "<<odom_);
+//        ROS_INFO_STREAM("pub odom "<<odom_);
 
 
     }

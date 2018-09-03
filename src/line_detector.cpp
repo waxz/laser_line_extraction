@@ -44,7 +44,7 @@ void line_extraction::LineSegmentDetector::processData(){
     this->laserScanCallback(scan_ptr_);
 }
 
-std::vector<line_extraction::Line> line_extraction::LineSegmentDetector::getLines(){
+std::vector<line_extraction::Line> line_extraction::LineSegmentDetector::getLines(int mode){
     lines_.clear();
 
     // todo:debug with block
@@ -73,8 +73,13 @@ std::vector<line_extraction::Line> line_extraction::LineSegmentDetector::getLine
 
 
 
-    // Extract the lines
-    this->line_extraction_.extractLines(lines_);
+    // Extract the lines or cluster
+    if(mode == 0){
+        this->line_extraction_.extractLines(lines_);
+
+    }else if(mode == 1){
+        this->line_extraction_.extractSegments(lines_);
+    }
     printf("get lines_ num = %d",int(lines_.size()));
     timer.stop();
     printf("time %.3f\n",timer.elapsedSeconds());
@@ -516,7 +521,7 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
             pubThread_(50,fake_pose_topic_,nh),
             tfThread_(20),
             listener_(nh,nh_private),
-            smoothPose_(10),
+            smoothPose_(5),
             cmd_data_ptr_(std::make_shared<std_msgs::String>())
     {
         pubthreadClass_.setTarget(pubThread_);
@@ -564,7 +569,9 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
                 }
 
             }
-            return;
+            if(!running_){
+                return;
+            }
         }
 
 
@@ -628,9 +635,7 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
                 pubthreadClass_.start();
             }
         }else{
-            if(!smoothPose_.full()){
-                return;
-            }
+            smoothPose_.clear();
             ros::Time tn = ros::Time::now();
 
             auto dur = tn -lastOkTime_;
@@ -667,6 +672,11 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
         }
 
     };
+
+
+vector<geometry_msgs::PoseStamped> line_extraction::SimpleShelfDetector::detect() {
+    std::cout<<"fffffffffffffff"<<std::endl;
+}
 
 
 

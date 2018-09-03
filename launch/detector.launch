@@ -70,6 +70,7 @@
         <param name="broadcast_tf" value="false"/>
         <param name="pub_pose" value="true"/>
         <param name="triangle_direction" value="1"/>
+        <!--1 point forward, -1 point backward-->
 
     </node>
 

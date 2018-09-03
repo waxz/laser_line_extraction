@@ -72,7 +72,8 @@ namespace line_extraction{
         LineSegmentDetector(ros::NodeHandle nh, ros::NodeHandle nh_private);
         bool getLaser(sensor_msgs::LaserScan &scan);
         void pubMarkers(std::vector<line_extraction::Line> lines);
-        std::vector<line_extraction::Line> getLines();
+        // get lines(0) or cluster(1)
+        std::vector<line_extraction::Line> getLines(int mode = 0);
     };
 
 
@@ -156,7 +157,7 @@ namespace line_extraction{
         double mean_y_;
         double mean_yaw_;
 
-        smoothPose(int cnt):
+        smoothPose(int cnt = 1 ):
                 cnt_(cnt),xs_(cnt), ys_(cnt),yaws_(cnt_){
             num_ = 0;
         }
@@ -177,10 +178,11 @@ namespace line_extraction{
             }
         }
         void getMean(){
-            mean_x_ = xs_.sum()/xs_.size();
-            mean_y_ = ys_.sum()/ys_.size();
-            mean_yaw_ = yaws_.sum()/yaws_.size();
-
+            if(num_ != 0){
+                mean_x_ = xs_.sum()/num_;
+                mean_y_ = ys_.sum()/num_;
+                mean_yaw_ = yaws_.sum()/num_;
+            }
         }
 
         bool full(){
@@ -253,6 +255,11 @@ namespace line_extraction{
     };
 
 
+    class SimpleShelfDetector:SimpleTriangleDetector{
+    public:
+        SimpleShelfDetector(ros::NodeHandle nh, ros::NodeHandle nh_private);
+        vector<geometry_msgs::PoseStamped> detect();
+    };
 
 
 }
