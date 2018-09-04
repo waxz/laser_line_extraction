@@ -49,13 +49,8 @@ std::vector<line_extraction::Line> line_extraction::LineSegmentDetector::getLine
 
     // todo:debug with block
     bool getMsg;
-    if(debug_mode_){
-        getMsg = listener.getOneMessage(this->scan_topic_,-1);
+    getMsg = listener.getOneMessage(this->scan_topic_,0.08);
 
-    }else{
-        getMsg = listener.getOneMessage(this->scan_topic_,0.05);
-
-    }
     if (!getMsg){
         std::cout<<std::endl;
 
@@ -521,7 +516,7 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
             pubThread_(50,fake_pose_topic_,nh),
             tfThread_(20),
             listener_(nh,nh_private),
-            smoothPose_(5),
+            smoothPose_(20),
             cmd_data_ptr_(std::make_shared<std_msgs::String>())
     {
         pubthreadClass_.setTarget(pubThread_);
@@ -604,10 +599,10 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
             //
             tf::Transform transform;
             tf::poseMsgToTF(pose.pose,transform);
-
+#if 0
             transform.setRotation(tf::createQuaternionFromYaw(smoothPose_.mean_yaw_));
             transform.setOrigin(tf::Vector3(smoothPose_.mean_x_,smoothPose_.mean_y_,0.0));
-
+#endif
 #if 1
 
             ros::Time tn = ros::Time::now();
@@ -635,7 +630,9 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
                 pubthreadClass_.start();
             }
         }else{
+# if 0
             smoothPose_.clear();
+#endif
             ros::Time tn = ros::Time::now();
 
             auto dur = tn -lastOkTime_;
@@ -673,9 +670,36 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
 
     };
 
+line_extraction::SimpleShelfDetector::SimpleShelfDetector(ros::NodeHandle nh, ros::NodeHandle nh_private) :line_extraction::SimpleTriangleDetector(nh,nh_private) {
 
+    // inital param
+
+
+}
 vector<geometry_msgs::PoseStamped> line_extraction::SimpleShelfDetector::detect() {
     std::cout<<"fffffffffffffff"<<std::endl;
+    vector<geometry_msgs::PoseStamped> targets;
+#if 0
+    SimpleTriangleDetector::detect();
+#endif
+
+    auto lines = lsd_.getLines(1);
+
+    //
+    std::cout<<min_gap_dist_<<std::endl;
+
+    // recurse find retangle
+
+
+
+
+
+
+
+    return targets;
+
+
+
 }
 
 

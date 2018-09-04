@@ -4,6 +4,10 @@
 #include <laser_line_extraction/line_detector.h>
 
 
+
+
+
+
 int main(int argc, char **argv)
 {
 
@@ -13,7 +17,7 @@ int main(int argc, char **argv)
     ros::NodeHandle nh;
     ros::NodeHandle nh_local("~");
 
-    line_extraction::TargetPublish targetPub_(nh,nh_local);
+    line_extraction::SimpleShelfDetector sd_(nh,nh_local);
 
 
     double frequency;
@@ -25,7 +29,7 @@ int main(int argc, char **argv)
     while (ros::ok())
     {
         t.start();
-        targetPub_.publish();
+        sd_.detect();
         t.stop();
         ROS_INFO("full time %.4f",t.elapsedSeconds());
         rate.sleep();
