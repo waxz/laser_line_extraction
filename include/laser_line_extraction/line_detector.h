@@ -59,6 +59,7 @@ namespace line_extraction{
         double max_range_;
         double angle_min_;
         double angle_max_;
+        double min_intensity_;
 
         bool debug_mode_;
 

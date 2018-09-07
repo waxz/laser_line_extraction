@@ -42,6 +42,7 @@
         <param name="max_range" value="2.1"/>
         <param name="min_angle" value="-1.575"/>
         <param name="max_angle" value="1.575"/>
+        <param name="min_intensity" value="100"/>
 
         <param name="filter_window" value="4"/>
 

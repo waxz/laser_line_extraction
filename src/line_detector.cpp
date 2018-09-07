@@ -25,15 +25,21 @@ void line_extraction::LineSegmentDetector::initParam(){
     nh_private_.param("max_range",max_range_,1.0);
     nh_private_.param("min_angle",angle_min_,-0.5*M_PI);
     nh_private_.param("max_angle",angle_max_,0.5*M_PI);
+    nh_private_.param("min_intensity",min_intensity_,100.0);
 
 
 };
 void line_extraction::LineSegmentDetector::processData(){
     // mask ranges
     // set range > max_range to 0
+
+    // mask intensities
+    // set intesity < min_intensity to 0
     auto msg = *scan_data_;
 
     valarray<float> r = container_util::createValarrayFromVector(msg.ranges);
+    valarray<float> i = container_util::createValarrayFromVector(msg.intensities);
+    r[i<float(min_intensity_)] = 0.0;
     r[r>float(max_range_)] = 0.0;
 
 
