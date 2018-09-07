@@ -14,6 +14,7 @@
 #include <ros/console.h>
 #include <geometry_msgs/PoseArray.h>
 #include <geometry_msgs/PointStamped.h>
+#include <std_msgs/String.h>
 
 #include <string>
 
@@ -71,7 +72,8 @@ namespace line_extraction{
         LineSegmentDetector(ros::NodeHandle nh, ros::NodeHandle nh_private);
         bool getLaser(sensor_msgs::LaserScan &scan);
         void pubMarkers(std::vector<line_extraction::Line> lines);
-        std::vector<line_extraction::Line> getLines();
+        // get lines(0) or cluster(1)
+        std::vector<line_extraction::Line> getLines(int mode = 0);
     };
 
 
@@ -155,7 +157,7 @@ namespace line_extraction{
         double mean_y_;
         double mean_yaw_;
 
-        smoothPose(int cnt):
+        smoothPose(int cnt = 1 ):
                 cnt_(cnt),xs_(cnt), ys_(cnt),yaws_(cnt_){
             num_ = 0;
         }
@@ -217,6 +219,13 @@ namespace line_extraction{
 
         string fake_pose_topic_;
 
+        string cmd_topic_;
+
+        std::shared_ptr<std_msgs::String> cmd_data_ptr_;
+
+        bool running_;
+
+
         ros::Time lastOkTime_;
         int expire_sec_;
 
@@ -227,6 +236,7 @@ namespace line_extraction{
 
         tf::Transform baseToLaser_tf_;
         geometry_msgs::PoseStamped triangle_pose_;
+        tf::StampedTransform stampedTransform_;
 
         line_extraction::smoothPose smoothPose_;
 

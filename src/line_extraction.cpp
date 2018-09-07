@@ -54,7 +54,32 @@ void LineExtraction::extractLines(std::vector<Line>& lines)
 
   lines = lines_;
 }
+///////////////////////////////////////////////////////////////////////////////
+// new segmentation function
+///////////////////////////////////////////////////////////////////////////////
+    void LineExtraction::extractSegments(std::vector<Line>& lines)
+    {
+      // Resets
+      filtered_indices_ = c_data_.indices;
+      lines_.clear();
 
+      // Filter indices
+      filterClosePoints();
+      filterOutlierPoints();
+
+      // Return no lines if not enough points left
+      if (filtered_indices_.size() <= std::max(params_.min_line_points, static_cast<unsigned int>(3)))
+      {
+        return;
+      }
+
+      // Split indices into lines and filter out short and sparse lines
+      split(filtered_indices_);
+      filterLines();
+
+
+      lines = lines_;
+    }
 ///////////////////////////////////////////////////////////////////////////////
 // Data setting
 ///////////////////////////////////////////////////////////////////////////////

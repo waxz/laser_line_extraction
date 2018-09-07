@@ -44,18 +44,13 @@ void line_extraction::LineSegmentDetector::processData(){
     this->laserScanCallback(scan_ptr_);
 }
 
-std::vector<line_extraction::Line> line_extraction::LineSegmentDetector::getLines(){
+std::vector<line_extraction::Line> line_extraction::LineSegmentDetector::getLines(int mode){
     lines_.clear();
 
     // todo:debug with block
     bool getMsg;
-    if(debug_mode_){
-        getMsg = listener.getOneMessage(this->scan_topic_,-1);
+    getMsg = listener.getOneMessage(this->scan_topic_,0.08);
 
-    }else{
-        getMsg = listener.getOneMessage(this->scan_topic_,0.05);
-
-    }
     if (!getMsg){
         std::cout<<std::endl;
 
@@ -73,8 +68,13 @@ std::vector<line_extraction::Line> line_extraction::LineSegmentDetector::getLine
 
 
 
-    // Extract the lines
-    this->line_extraction_.extractLines(lines_);
+    // Extract the lines or cluster
+    if(mode == 0){
+        this->line_extraction_.extractLines(lines_);
+
+    }else if(mode == 1){
+        this->line_extraction_.extractSegments(lines_);
+    }
     printf("get lines_ num = %d",int(lines_.size()));
     timer.stop();
     printf("time %.3f\n",timer.elapsedSeconds());
@@ -516,7 +516,8 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
             pubThread_(50,fake_pose_topic_,nh),
             tfThread_(20),
             listener_(nh,nh_private),
-            smoothPose_(10)
+            smoothPose_(10),
+            cmd_data_ptr_(std::make_shared<std_msgs::String>())
     {
         pubthreadClass_.setTarget(pubThread_);
         tfthreadClass_.setTarget(tfThread_);
@@ -527,6 +528,8 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
 
         fake_pose_topic_ = "triangle_pose";
 
+        cmd_topic_ = "waypoint_user_pub";
+
         baseToLaser_tf_.setIdentity();
 
         nh_private_.param("expire_sec",expire_sec_,5);
@@ -534,6 +537,11 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
 
         nh_private_.param("broadcast_tf",broadcast_tf_, false);
         nh_private_.param("pub_pose",pub_pose_, true);
+
+        auto res = listener_.createSubcriber<std_msgs::String>(cmd_topic_,1);
+        cmd_data_ptr_ = std::get<0>(res);
+
+        running_ = false;
 
 
 
@@ -544,6 +552,24 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
     }
 
     void line_extraction::TargetPublish::publish(){
+        // how to change state
+        if(!running_){
+
+            bool getmsg = listener_.getOneMessage(cmd_topic_,0.1);
+
+            if(getmsg){
+                if(cmd_data_ptr_.get()->data == "dock"){
+                    running_ = true;
+                    lastOkTime_ = ros::Time::now();
+                }
+
+            }
+            if(!running_){
+                return;
+            }
+        }
+
+
         auto targets = sd_.detect();
         if(targets.size() == 1){
             // todo : bypass in debug model ;get base to laser tf
@@ -561,7 +587,7 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
 
             smoothPose_.update(pose.pose.position.x,pose.pose.position.y, tf::getYaw(pose.pose.orientation));
 
-#if 0
+#if 1
 
             if (!smoothPose_.full()){
                return;
@@ -583,10 +609,10 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
             ros::Duration transform_tolerance;
             transform_tolerance.fromSec(0.1);
             ros::Time transform_expiration = (tn + transform_tolerance);
-            tf::StampedTransform stampedTransform = tf::StampedTransform(baseToLaser_tf_*transform,
+            stampedTransform_ = tf::StampedTransform(baseToLaser_tf_*transform,
                                                                        transform_expiration,
                                                                        base_frame_id_, target_framde_id_);
-            tfthreadClass_.syncArg(stampedTransform);
+            tfthreadClass_.syncArg(stampedTransform_);
 
 #endif
             triangle_pose_.header.stamp = tn;
@@ -610,11 +636,14 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
             ros::Time tn = ros::Time::now();
 
             auto dur = tn -lastOkTime_;
+//            ROS_ERROR("dur time : %f",dur.toSec());
             if(dur.toSec()<expire_sec_){
                 tf::Transform tranform_change,triangle_tf;
                 tranform_change.setIdentity();
                 bool get = listener_.getTransformChange("odom",base_frame_id_,tranform_change,
-                                             triangle_pose_.header.stamp,tn,0.1,false);
+                                             triangle_pose_.header.stamp,tn,0.1,true);
+//                ROS_ERROR("time : %f, get chane tf %d,x=%.3f,y=%.3f,yaw=%.3f",dur.toSec(), get,tranform_change.getOrigin().x(),tranform_change.getOrigin().y(),
+//                tf::getYaw(tranform_change.getRotation()));
 
 
                 tf::poseMsgToTF(triangle_pose_.pose,triangle_tf);
@@ -622,9 +651,21 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
                 triangle_pose_.header.stamp = tn;
                 pubthreadClass_.syncArg(triangle_pose_);
 
+                ros::Duration transform_tolerance;
+                transform_tolerance.fromSec(0.1);
+                ros::Time transform_expiration = (tn + transform_tolerance);
+                stampedTransform_ = tf::StampedTransform(tranform_change.inverse()*stampedTransform_,
+                                                                             transform_expiration,
+                                                                             base_frame_id_, target_framde_id_);
+                tfthreadClass_.syncArg(stampedTransform_);
+                smoothPose_.clear();
+
+
             }else{
                 smoothPose_.clear();
                 pubthreadClass_.pause();
+                tfthreadClass_.pause();
+                running_ = false;
             };
 
 
