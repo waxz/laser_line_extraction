@@ -7,18 +7,18 @@
 
     </node>
 
-    <node pkg="robot_pose_ekf" type="robot_pose_ekf" name="triangle_pose_ekf" output="screen">
-        <param name="output_frame" value="base_triangle"/>
-        <param name="base_footprint_frame" value="base_link"/>
-        <param name="freq" value="30.0"/>
-        <param name="sensor_timeout" value="1.0"/>
-        <param name="odom_used" value="true"/>
-        <param name="imu_used" value="true"/>
-        <param name="vo_used" value="false"/>
+    <!--<node pkg="robot_pose_ekf" type="robot_pose_ekf" name="triangle_pose_ekf" output="screen">-->
+        <!--<param name="output_frame" value="base_triangle"/>-->
+        <!--<param name="base_footprint_frame" value="base_link"/>-->
+        <!--<param name="freq" value="30.0"/>-->
+        <!--<param name="sensor_timeout" value="1.0"/>-->
+        <!--<param name="odom_used" value="true"/>-->
+        <!--<param name="imu_used" value="true"/>-->
+        <!--<param name="vo_used" value="false"/>-->
 
-        <param name="inverse_tf" value="true"/>
-        <remap from="odom" to="triangle_odom" />
-    </node>
+        <!--<param name="inverse_tf" value="true"/>-->
+        <!--<remap from="odom" to="triangle_odom" />-->
+    <!--</node>-->
     
     <node name="line_detector_node" pkg="laser_line_extraction" type="line_detector_node">
         <param name="~frequency" value="20.0" />
@@ -42,7 +42,7 @@
         <param name="max_range" value="2.1"/>
         <param name="min_angle" value="-1.575"/>
         <param name="max_angle" value="1.575"/>
-        <param name="min_intensity" value="100"/>
+        <param name="min_intensity" value="-1"/>
 
         <param name="filter_window" value="4"/>
 

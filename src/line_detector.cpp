@@ -55,7 +55,7 @@ std::vector<line_extraction::Line> line_extraction::LineSegmentDetector::getLine
 
     // todo:debug with block
     bool getMsg;
-    getMsg = listener.getOneMessage(this->scan_topic_,0.08);
+    getMsg = listener.getOneMessage(this->scan_topic_,-1);
 
     if (!getMsg){
         std::cout<<std::endl;
@@ -523,7 +523,7 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
             tfThread_(20),
             listener_(nh,nh_private),
             smoothPose_(10),
-            cmd_data_ptr_(std::make_shared<std_msgs::String>())
+            cmd_data_ptr_(std::make_shared<std_msgs::Header>())
     {
         pubthreadClass_.setTarget(pubThread_);
         tfthreadClass_.setTarget(tfThread_);
@@ -534,7 +534,7 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
 
         fake_pose_topic_ = "triangle_pose";
 
-        cmd_topic_ = "waypoint_user_pub";
+        cmd_topic_ = "task_switch";
 
         baseToLaser_tf_.setIdentity();
 
@@ -544,10 +544,15 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
         nh_private_.param("broadcast_tf",broadcast_tf_, false);
         nh_private_.param("pub_pose",pub_pose_, true);
 
-        auto res = listener_.createSubcriber<std_msgs::String>(cmd_topic_,1);
+        auto res = listener_.createSubcriber<std_msgs::Header>(cmd_topic_,1);
         cmd_data_ptr_ = std::get<0>(res);
 
         running_ = false;
+
+
+        lighthouse_pose_topic_ = "lighthouse_pose";
+        lighthouse_pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>(lighthouse_pose_topic_,1);
+
 
 
 
@@ -558,15 +563,25 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
     }
 
     void line_extraction::TargetPublish::publish(){
+        // broadcast base_link base_triangle tf
+        // publish base_link pose in base_triangle
+        // publish base_triangle pose in base_link
         // how to change state
         if(!running_){
 
             bool getmsg = listener_.getOneMessage(cmd_topic_,0.1);
 
             if(getmsg){
-                if(cmd_data_ptr_.get()->data == "dock"){
-                    running_ = true;
-                    lastOkTime_ = ros::Time::now();
+                if ( cmd_data_ptr_.get()->frame_id == "lighthouse_planner" || cmd_data_ptr_.get()->frame_id.empty() )
+                {
+                    if ( cmd_data_ptr_.get()->seq == 0 )
+                    {
+                        running_ = false;
+                    }
+                    else
+                    {
+                        running_ = true;
+                    }
                 }
 
             }
@@ -593,6 +608,8 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
 
             smoothPose_.update(pose.pose.position.x,pose.pose.position.y, tf::getYaw(pose.pose.orientation));
 
+            // use smooth cache
+
 #if 1
 
             if (!smoothPose_.full()){
@@ -606,26 +623,41 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
             tf::Transform transform;
             tf::poseMsgToTF(pose.pose,transform);
 
-            transform.setRotation(tf::createQuaternionFromYaw(smoothPose_.mean_yaw_));
+#if 0
             transform.setOrigin(tf::Vector3(smoothPose_.mean_x_,smoothPose_.mean_y_,0.0));
+#endif
 
-#if 1
+            transform.setRotation(tf::createQuaternionFromYaw(smoothPose_.mean_yaw_));
 
             ros::Time tn = ros::Time::now();
-            ros::Duration transform_tolerance;
-            transform_tolerance.fromSec(0.1);
-            ros::Time transform_expiration = (tn + transform_tolerance);
-            stampedTransform_ = tf::StampedTransform(baseToLaser_tf_*transform,
-                                                                       transform_expiration,
-                                                                       base_frame_id_, target_framde_id_);
-            tfthreadClass_.syncArg(stampedTransform_);
 
-#endif
-            triangle_pose_.header.stamp = tn;
-            triangle_pose_.header.frame_id = target_framde_id_;
-            tf::poseTFToMsg((baseToLaser_tf_*transform).inverse(),triangle_pose_.pose);
-            pubthreadClass_.syncArg(triangle_pose_);
+            if ( broadcast_tf_){
+                ros::Duration transform_tolerance;
+                transform_tolerance.fromSec(0.1);
+                ros::Time transform_expiration = (tn + transform_tolerance);
+                stampedTransform_ = tf::StampedTransform(baseToLaser_tf_*transform,
+                                                         transform_expiration,
+                                                         base_frame_id_, target_framde_id_);
+                tfthreadClass_.syncArg(stampedTransform_);
+            }
+
+            if (pub_pose_){
+                // publish base in triangle
+                base_in_triangle_.header.stamp = tn;
+                base_in_triangle_.header.frame_id = target_framde_id_;
+                tf::poseTFToMsg((baseToLaser_tf_*transform).inverse(),base_in_triangle_.pose);
+                pubthreadClass_.syncArg(base_in_triangle_);
+            }
+
+
+
             lastOkTime_ = tn;
+
+            // publish triangle in base
+            triangle_in_base_.header.stamp = tn;
+            triangle_in_base_.header.frame_id = base_frame_id_;
+            tf::poseTFToMsg(baseToLaser_tf_*transform,triangle_in_base_.pose);
+            lighthouse_pose_pub_.publish(triangle_in_base_);
 
 
 
@@ -636,7 +668,13 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
                 pubthreadClass_.start();
             }
         }else{
+            // detect fail
             if(!smoothPose_.full()){
+                if((smoothPose_.num_ == 0)){
+                    triangle_in_base_.header.frame_id = "detect_failed" ;
+                    lighthouse_pose_pub_.publish(triangle_in_base_);
+                }
+
                 return;
             }
             ros::Time tn = ros::Time::now();
@@ -647,24 +685,39 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
                 tf::Transform tranform_change,triangle_tf;
                 tranform_change.setIdentity();
                 bool get = listener_.getTransformChange("odom",base_frame_id_,tranform_change,
-                                             triangle_pose_.header.stamp,tn,0.1,true);
+                                             base_in_triangle_.header.stamp,tn,0.1,true);
 //                ROS_ERROR("time : %f, get chane tf %d,x=%.3f,y=%.3f,yaw=%.3f",dur.toSec(), get,tranform_change.getOrigin().x(),tranform_change.getOrigin().y(),
 //                tf::getYaw(tranform_change.getRotation()));
 
 
-                tf::poseMsgToTF(triangle_pose_.pose,triangle_tf);
-                tf::poseTFToMsg(triangle_tf*tranform_change,triangle_pose_.pose);
-                triangle_pose_.header.stamp = tn;
-                pubthreadClass_.syncArg(triangle_pose_);
+                if ( broadcast_tf_){
+                    ros::Duration transform_tolerance;
+                    transform_tolerance.fromSec(0.1);
+                    ros::Time transform_expiration = (tn + transform_tolerance);
+                    stampedTransform_ = tf::StampedTransform(tranform_change.inverse()*stampedTransform_,
+                                                             transform_expiration,
+                                                             base_frame_id_, target_framde_id_);
+                    tfthreadClass_.syncArg(stampedTransform_);
+                }
 
-                ros::Duration transform_tolerance;
-                transform_tolerance.fromSec(0.1);
-                ros::Time transform_expiration = (tn + transform_tolerance);
-                stampedTransform_ = tf::StampedTransform(tranform_change.inverse()*stampedTransform_,
-                                                                             transform_expiration,
-                                                                             base_frame_id_, target_framde_id_);
-                tfthreadClass_.syncArg(stampedTransform_);
+                if(pub_pose_){
+                    tf::poseMsgToTF(base_in_triangle_.pose,triangle_tf);
+                    tf::poseTFToMsg(triangle_tf*tranform_change,base_in_triangle_.pose);
+                    base_in_triangle_.header.stamp = tn;
+                    pubthreadClass_.syncArg(base_in_triangle_);
+                }
+
                 smoothPose_.clear();
+
+                // publish triangle in base
+                triangle_in_base_.header.stamp = tn;
+#if 0
+                triangle_in_base_.header.frame_id = "detect_failed";
+
+#endif
+                tf::poseMsgToTF(triangle_in_base_.pose,triangle_tf);
+                tf::poseTFToMsg(tranform_change.inverse()*triangle_tf,triangle_in_base_.pose);
+                lighthouse_pose_pub_.publish(triangle_in_base_);
 
 
             }else{
@@ -674,18 +727,6 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
                 running_ = false;
             };
 
-
-
-
-
-
-#if 0
-            smoothPose_.clear();
-            triangle_pose_.pose.position.x = 100000;
-            triangle_pose_.pose.position.y = 100000;
-
-            pubthreadClass_.syncArg(triangle_pose_);
-#endif
         }
 
     };

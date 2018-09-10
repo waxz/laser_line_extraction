@@ -15,6 +15,7 @@
 #include <geometry_msgs/PoseArray.h>
 #include <geometry_msgs/PointStamped.h>
 #include <std_msgs/String.h>
+#include <std_msgs/Header.h>
 
 #include <string>
 
@@ -210,7 +211,8 @@ namespace line_extraction{
         rosnode::Listener listener_;
 
         // pose pub
-        ros::Publisher fake_pose_pub_;
+        ros::Publisher lighthouse_pose_pub_;
+        string lighthouse_pose_topic_;
 
         string base_frame_id_;
 
@@ -222,7 +224,7 @@ namespace line_extraction{
 
         string cmd_topic_;
 
-        std::shared_ptr<std_msgs::String> cmd_data_ptr_;
+        std::shared_ptr<std_msgs::Header> cmd_data_ptr_;
 
         bool running_;
 
@@ -236,7 +238,9 @@ namespace line_extraction{
         bool pub_pose_;
 
         tf::Transform baseToLaser_tf_;
-        geometry_msgs::PoseStamped triangle_pose_;
+        geometry_msgs::PoseStamped base_in_triangle_;
+        geometry_msgs::PoseStamped triangle_in_base_;
+
         tf::StampedTransform stampedTransform_;
 
         line_extraction::smoothPose smoothPose_;
