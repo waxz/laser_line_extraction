@@ -260,6 +260,176 @@ namespace line_extraction{
     };
 
 
+    /*
+ *       []b2            []b1
+ *
+ *
+ *       []f2            []f1
+ *
+ *
+ *             robot
+ *
+ * */
+
+    struct shelfDetectStage{
+        int stage_;
+        type_util::Point2d f1_;
+        type_util::Point2d f2_;
+        type_util::Point2d b1_;
+        type_util::Point2d b2_;
+        type_util::Point2d center_;
+        double yaw_;
+        std::valarray<int> valid_;
+        vector<int> segment_id_;
+        double score_;
+        double base_;
+
+        double front_len_;
+        double side_len_;
+
+        double getScore() const{
+            // how to compute score
+            double front_len1 = geometry_util::PointToPointDistance(f1_,f2_);
+            double front_len2 = geometry_util::PointToPointDistance(b1_,b2_);
+
+            double side_len1 = geometry_util::PointToPointDistance(f1_,b1_);
+            double side_len2 = geometry_util::PointToPointDistance(f2_,b2_);
+
+            double dia_len1 = geometry_util::PointToPointDistance(f1_,b2_);
+            double dia_len2 = geometry_util::PointToPointDistance(f2_,b1_);
+
+            double score = pow(base_,front_len1) + pow(base_,front_len2)
+                     + pow(base_,side_len1)+ pow(base_,side_len2)
+                     + pow(base_,dia_len1) + pow(base_,dia_len2);
+
+            score /= 6.0;
+            return  score;
+        }
+
+        bool getPosition(type_util::Point2d &p, double &yaw){
+
+            if(valid_.sum() < 2){
+                return false;
+            }
+            // four valid
+            if(valid_.sum() == 4){
+                p.x = 0.25*(f1_.x + f2_.x + b1_.x + b2_.x);
+                p.y = 0.25*(f1_.y + f2_.y + b1_.y + b2_.y);
+
+                yaw = 0.25*(atan2(b1_.y - f1_.y, b1_.x - f1_.x)
+                            + atan2(b2_.y - f2_.y, b2_.x - f2_.x)
+                            + atan2(f2_.y - f1_.y, f2_.x - f1_.x) - 0.5*M_PI
+                            + atan2(b2_.y - b1_.y, b2_.x - b1_.x) - 0.5*M_PI);
+            }
+
+        }
+
+
+        shelfDetectStage(double front_len = 1.0, double side_len=1.0):stage_(0){
+
+            front_len = front_len;
+            side_len_ = side_len;
+            valid_ = {0,0,0,0};
+
+            score_ = 0.0;
+        }
+
+
+
+
+
+        void clear(){
+            valid_ = {0,0,0,0};
+
+            score_ = 0.0;
+        }
+
+        void setValidF1(int v, int i = -1,type_util::Point2d p = type_util::Point2d(0.0,0.0)){
+            valid_[0] = v;
+            if (v == 1){
+                segment_id_[0] = i;
+                f1_ = p;
+            }
+
+        }
+        void setValidF2(int v, int i = -1,type_util::Point2d p = type_util::Point2d(0.0,0.0)){
+            valid_[1] = v;
+            if (v == 1){
+                segment_id_[1] = i;
+                f2_ = p;
+            }
+
+        }
+        void setValidB1(int v, int i = -1,type_util::Point2d p = type_util::Point2d(0.0,0.0)){
+            valid_[2] = v;
+            if (v == 1){
+                segment_id_[2] = i;
+                b1_ = p;
+            }
+
+        }
+        void setValidB2(int v, int i = -1,type_util::Point2d p = type_util::Point2d(0.0,0.0)){
+            valid_[3] = v;
+            if (v == 1){
+                segment_id_[3] = i;
+                b2_ = p;
+            }
+
+        }
+
+        bool findF1(type_util::Point2d p, double radius){
+            return (valid_[0] == 1)?geometry_util::PointToPointDistance(p,f1_) < radius : false;
+        }
+
+        bool findF2(type_util::Point2d p, double radius){
+            return (valid_[1] == 1)?geometry_util::PointToPointDistance(p,f2_) < radius : false;
+        }
+        bool findB1(type_util::Point2d p, double radius){
+            return (valid_[2] == 1)?geometry_util::PointToPointDistance(p,b1_) < radius : false;
+        }
+        bool findB2(type_util::Point2d p, double radius){
+            return (valid_[3] == 1)?geometry_util::PointToPointDistance(p,b2_) < radius : false;
+        }
+
+
+    };
+
+
+    class SimpleShelfDetector:SimpleTriangleDetector{
+    protected:
+        double front_len_;
+        double side_len_;
+
+        double min_front_len_;
+        double max_front_len_;
+
+        double min_side_len_;
+        double max_side_len_;
+
+        double min_front_angle_;
+        double max_front_angle_;
+
+        double min_90_;
+        double max_90_;
+
+        double max_front_x_;
+        double max_front_y_;
+
+        double min_full_detect_dist_;
+
+        double min_match_radius_;
+
+        shelfDetectStage latest_shelf_;
+
+        void initParams();
+        bool fitModel(vector<type_util::Point2d> & pointsInModel,double x0, double x1, double x2,geometry_msgs::PoseStamped & ModelPose);
+
+
+    public:
+        void getDetectParams();
+        SimpleShelfDetector(ros::NodeHandle nh, ros::NodeHandle nh_private);
+        vector<geometry_msgs::PoseStamped> detect();
+    };
 
 
 }

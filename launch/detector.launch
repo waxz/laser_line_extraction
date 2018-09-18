@@ -1,11 +1,11 @@
 <launch>
-    <node pkg="laser_line_extraction" type="line_detector_ekf_node" name="line_detector_ekf_node" output="screen">
-        <param name="rate" value="30"/>
-        <param name="cov_x" value="0.005"/>
-        <param name="cov_y" value="0.03"/>
-        <param name="cov_yaw" value="0.02"/>
+    <!--<node pkg="laser_line_extraction" type="line_detector_ekf_node" name="line_detector_ekf_node" output="screen">-->
+        <!--<param name="rate" value="30"/>-->
+        <!--<param name="cov_x" value="0.005"/>-->
+        <!--<param name="cov_y" value="0.03"/>-->
+        <!--<param name="cov_yaw" value="0.02"/>-->
 
-    </node>
+    <!--</node>-->
 
     <!--<node pkg="robot_pose_ekf" type="robot_pose_ekf" name="triangle_pose_ekf" output="screen">-->
         <!--<param name="output_frame" value="base_triangle"/>-->

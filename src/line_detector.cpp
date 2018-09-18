@@ -7,10 +7,12 @@
 // choose valid data
 
 line_extraction::LineSegmentDetector::LineSegmentDetector(ros::NodeHandle nh, ros::NodeHandle nh_private):
-nh_(nh),
-nh_private_(nh_private),
-line_extraction::LineExtractionROS(nh, nh_private),
-listener(nh, nh_private){
+        line_extraction::LineExtractionROS(nh, nh_private),
+        nh_(nh),
+        nh_private_(nh_private),
+        listener(nh, nh_private)
+
+{
     initParam();
 
 
@@ -518,10 +520,10 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
             nh_(nh),
             nh_private_(nh_private),
             sd_(nh,nh_private),
+            listener_(nh,nh_private),
             fake_pose_topic_("triangle_pose"),
             pubThread_(50,fake_pose_topic_,nh),
             tfThread_(20),
-            listener_(nh,nh_private),
             smoothPose_(10),
             cmd_data_ptr_(std::make_shared<std_msgs::Header>())
     {
@@ -669,12 +671,9 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
             }
         }else{
             // detect fail
-            if(!smoothPose_.full()){
-                if((smoothPose_.num_ == 0)){
-                    triangle_in_base_.header.frame_id = "detect_failed" ;
-                    lighthouse_pose_pub_.publish(triangle_in_base_);
-                }
-
+            if((smoothPose_.num_ == 0)){
+                triangle_in_base_.header.frame_id = "detect_failed" ;
+                lighthouse_pose_pub_.publish(triangle_in_base_);
                 return;
             }
             ros::Time tn = ros::Time::now();
@@ -707,7 +706,7 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
                     pubthreadClass_.syncArg(base_in_triangle_);
                 }
 
-                smoothPose_.clear();
+                smoothPose_.num_=1;
 
                 // publish triangle in base
                 triangle_in_base_.header.stamp = tn;
@@ -730,6 +729,541 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
         }
 
     };
+
+line_extraction::SimpleShelfDetector::SimpleShelfDetector(ros::NodeHandle nh, ros::NodeHandle nh_private) :line_extraction::SimpleTriangleDetector(nh,nh_private) {
+
+
+    getDetectParams();
+    initParams();
+
+
+
+}
+
+void line_extraction::SimpleShelfDetector::initParams() {
+
+    // inital param
+    nh_private_.param("min_front_len",min_front_len_,0.8);
+    nh_private_.param("max_front_len",max_front_len_,1.2);
+    min_front_len_ *= front_len_;
+    max_front_len_ *= front_len_;
+
+    nh_private_.param("min_side_len",min_side_len_,0.8);
+    nh_private_.param("max_side_len",max_side_len_,1.2);
+    min_side_len_ *= side_len_;
+    max_side_len_ *= side_len_;
+
+    nh_private_.param("min_90_",min_90_,0.8);
+    nh_private_.param("max_90_",max_90_,1.2);
+
+    min_90_ *= 0.5*M_PI;
+    max_90_ *= 0.5*M_PI;
+
+    nh_private_.param("min_front_angle",min_front_angle_,0.4*M_PI);
+    nh_private_.param("max_front_angle",max_front_angle_,0.6*M_PI);
+
+    nh_private_.param("max_front_x",max_front_x_,1.5);
+    nh_private_.param("max_front_y",max_front_y_,0.3);
+
+
+
+    nh_private_.param("min_full_detect_dist",min_full_detect_dist_,2.0);
+    nh_private_.param("min_match_radius",min_match_radius_,0.1);
+
+
+}
+
+void line_extraction::SimpleShelfDetector::getDetectParams() {
+
+    // get desk params
+
+    // only two param
+
+    nh_private_.param("front_len", front_len_, 0.5);
+    nh_private_.param("side_len", side_len_, 0.5);
+
+
+}
+
+bool line_extraction::SimpleShelfDetector::fitModel(vector<type_util::Point2d> &pointsInModel, double x0, double x1,
+                                                    double x2, geometry_msgs::PoseStamped &ModelPose) {
+
+    return false;
+    targetPoints_.header = latestScan_.header;
+    geometry_msgs::Pose pose = tf_util::createPoseFromXYYaw(0.0,0.0,x2);
+#if 0
+    auto q = tf::createQuaternionFromYaw(x2);
+
+        pose.orientation.x = q.x();
+        pose.orientation.y = q.y();
+        pose.orientation.z = q.z();
+        pose.orientation.w = q.w();
+
+#endif
+
+    // convert points to Eigen
+    int m = pointsInModel.size();
+    Eigen::MatrixXd measuredValues(m, 2);
+    for (int i = 0; i < m; i++) {
+        measuredValues(i, 0) = pointsInModel[i].x;
+        measuredValues(i, 1) = pointsInModel[i].y;
+
+        pose.position.x = pointsInModel[i].x;
+        pose.position.y = pointsInModel[i].y;
+
+        targetPoints_.poses.push_back(pose);
+    }
+
+    Eigen::VectorXd x(4);
+    decltype(x) model(1);
+
+    x(0) = x0;             // initial value for 'a'
+    x(1) = x1;             // initial value for 'b'
+    x(2) = x2;             // initial value for 'c'
+    x(3) =  M_PI*120.0/180.0;
+    model(0) = triangle_direction_;
+    ROS_INFO_STREAM("get init result \n"<<x);
+
+#if 1
+
+    opt_util::SimpleSolver<opt_util::VFunctor> sm;
+    sm.updataModel(model);
+    sm.setParams(x);
+    sm.feedData(measuredValues);
+    int status = sm.solve();
+    auto meanerror = sm.getMeanError();
+
+    // check fit error and
+    ROS_INFO_STREAM("get optimize result \n"<<sm.getParam()<<"mean error"<<meanerror);
+
+    if(meanerror < max_fit_error_){
+        x = sm.getParam();
+
+    } else{
+        return false;
+    }
+
+
+#endif
+    targetPose_.header = latestScan_.header;
+    targetPose_.pose = tf_util::createPoseFromXYYaw(x(0),x(1),x(2));
+#if 0
+
+    targetPose_.pose.position.x = x(0);
+        targetPose_.pose.position.y = x(1);
+        targetPose_.pose.position.z = 0.0;
+        q = tf::createQuaternionFromYaw(x(2));
+
+        targetPose_.pose.orientation.x = q.x();
+        targetPose_.pose.orientation.y = q.y();
+        targetPose_.pose.orientation.z = q.z();
+        targetPose_.pose.orientation.w = q.w();
+#endif
+
+
+
+
+    targetPub_.publish(targetPose_);
+    pointsPub_.publish(targetPoints_);
+    ModelPose = targetPose_;
+
+    return true;
+
+
+
+}
+
+
+
+
+
+// detect shelf
+// from scratch : strict mode ,must match specific pattern
+// keep state, avoid detect from scratch
+// task complete condition successful or failed
+//
+//
+
+
+// publish posestaamped : position + frameid
+// detect obscale
+/*1.detect 2 leg
+ * 2. track and detect
+ * 3. base on desk position choose to detect 4 leg
+ * before laser enter desk, avoid losing  track of back leg
+ *
+ * */
+
+vector<geometry_msgs::PoseStamped> line_extraction::SimpleShelfDetector::detect() {
+    std::cout<<"SimpleShelfDetector"<<std::endl;
+    vector<geometry_msgs::PoseStamped> targets;
+#if 0
+    SimpleTriangleDetector::detect();
+#endif
+    // keep track of detection stage
+    // stage 0 : in front of entry, first detect
+    // stage 1 : keep track of each leg
+
+
+    // get all cluster with a small length
+    auto lines = lsd_.getLines(1);
+    // if get no lines ,return
+    if (lines.empty()){
+
+        return targets;
+    }
+
+    // detect stage: 0 initial detect , 1 detect ok
+    // detect 2 or 4
+    std::vector<shelfDetectStage> shelfVec(20,shelfDetectStage(front_len_,side_len_));
+    shelfVec.clear();
+    if (latest_shelf_.stage_ == 0){
+        // first detect legs base on order: f1,f2 is required , b1, b2 is optional
+
+        // iter on all cluster
+        // get 2,4,0 legs ,not 3
+
+        // first find 2
+
+        // if find 2 find 4
+
+        if(lines.size() >= 4 ){
+            for(int i=0; i< lines.size();i++){
+                for(int j=i+1;j < lines.size();j++){
+
+                    auto l1 = lines[i];
+                    auto l2 = lines[j];
+                    type_util::Point2d
+                            l1_s(l1.getStart()[0], l1.getStart()[1]),
+                            l1_e(l1.getEnd()[0],l1.getEnd()[1]),
+                            l2_s(l2.getStart()[0], l2.getStart()[1]),
+                            l2_e(l2.getEnd()[0],l2.getEnd()[1]);
+
+                    type_util::Point2d l1_c(0.5*(l1_s.x + l1_e.x),0.5*(l1_s.y + l1_e.y));
+                    type_util::Point2d l2_c(0.5*(l2_s.x + l2_e.x),0.5*(l2_s.y + l2_e.y));
+                    type_util::Point2d front_c(0.5*(l2_c.x + l1_c.x),0.5*(l2_c.y + l1_c.y));
+
+                    // get line between two lines's center
+                    double dist = geometry_util::PointToPointDistance(l1_c,l2_c);
+
+                    double angle21 = atan2(l2_c.y - l1_c.y, l2_c.x - l1_c.x);
+
+                    // get length
+
+                    // get angle
+
+                    bool cond1 = dist > min_front_len_ && dist < max_front_len_;
+                    bool cond2 = angle21 > min_front_angle_ && angle21 < max_front_angle_;
+                    bool cond3 = fabs(front_c.y) < max_front_y_;
+                    bool cond4 = front_c.x < max_front_x_;
+
+                    // match all condition
+                    if(cond1&&cond2&&cond3&&cond4){
+                        // find b1 b2
+                        //
+                        if (j - i >= 3){
+                            for(int k = i+1;k<j-1;k++){
+                                auto l3 = lines[k];
+                                type_util::Point2d
+                                        l3_s(l3.getStart()[0], l3.getStart()[1]),
+                                        l3_e(l3.getEnd()[0],l3.getEnd()[1]);
+                                type_util::Point2d l3_c(0.5*(l3_s.x + l3_e.x),0.5*(l3_s.y + l3_e.y));
+
+                                // check condition
+                                double dist_31 = geometry_util::PointToPointDistance(l3_c,l1_c);
+                                double angle312 = angle21 - atan2(l3_c.y - l1_c.y, l3_c.x - l1_c.x);
+                                bool cond5 = angle312 > min_90_ && angle312 < max_90_;
+                                bool cond7 = dist_31>min_side_len_ && dist_31 < max_side_len_;
+
+
+
+                                // find 3
+                                if(cond7&&cond5){
+                                    for(int l = k+1; l< j;l++){
+                                        auto l4 = lines[k];
+                                        type_util::Point2d
+                                                l4_s(l4.getStart()[0], l4.getStart()[1]),
+                                                l4_e(l4.getEnd()[0],l4.getEnd()[1]);
+                                        type_util::Point2d l4_c(0.5*(l4_s.x + l4_e.x),0.5*(l4_s.y + l4_e.y));
+
+                                        double dist_42 = geometry_util::PointToPointDistance(l4_c,l2_c);
+                                        double angle421 = angle21 - atan2(l4_c.y - l2_c.y, l4_c.x - l2_c.x);
+                                        bool cond6 = angle421 > min_90_ && angle421 < max_90_;
+                                        bool cond8 = dist_42 > min_side_len_ && dist_42 < max_side_len_;
+
+                                        if (cond6 && cond8){
+                                            shelfDetectStage s(front_len_, side_len_);
+                                            s.f1_ = l1_c;
+                                            s.f2_ = l2_c;
+                                            s.b1_ = l3_c;
+                                            s.b2_ = l4_c;
+                                            s.setValidF1(1,i);
+                                            s.setValidF1(1,j);
+                                            s.setValidF1(1,k);
+                                            s.setValidF1(1,l);
+
+
+
+                                        }
+
+
+                                    }
+                                }
+
+
+                            }
+
+                        }
+
+
+
+                    }
+
+                }
+            }
+
+
+
+
+
+
+        }
+
+
+    }else if(latest_shelf_.stage_ == 1){
+        // check position
+        // if not in desk, only f1, f2 is reauired
+        // if in desk [at min_dist ], b1, b2 is required
+    }
+
+    if(!shelfVec.empty()){
+        lsd_.getLaser(latestScan_);
+        cacheData();
+        auto ranges = container_util::createValarrayFromVector(latestScan_.ranges);
+        auto xs = ranges*cache_cos_;
+        auto ys = ranges*cache_sin_;
+
+        // sort score
+        // find best match
+        std::sort(shelfVec.begin(), shelfVec.end(),[](const shelfDetectStage &v1, const shelfDetectStage &v2){ return v2.getScore()>v1.getScore(); });
+
+        auto bestShelf = shelfVec[0];
+        type_util::Point2d pos;
+        double yaw;
+        bestShelf.getPosition(pos, yaw);
+
+        // optimazition
+        ROS_ERROR("get shelf at [%.3f,%.3f],%.3f",pos.x, pos.y, yaw);
+
+
+        // fit model
+        std::vector<type_util::Point2d> pointsInScan;
+
+        // prepare data
+
+        type_util::Point2d p;
+        for (int i=0; i <4 ; i++){
+            if(bestShelf.valid_[i] == 1){
+                auto ids = lines[bestShelf.segment_id_[i]].getIndices();
+
+                for(auto id:ids){
+                    p.x = xs[id];
+                    p.y = ys[id];
+                    pointsInScan.push_back(p);
+
+                }
+            }
+        }
+
+        // get easteam result
+
+        bestShelf.getPosition(pos,yaw);
+
+        geometry_msgs::PoseStamped pose;
+        fitModel(pointsInScan,pos.x,pos.y,yaw,pose);
+    }
+
+
+
+
+    //
+    std::cout<<min_gap_dist_<<std::endl;
+
+    // sort legs according to distance
+//    std::sort(lines.begin(),lines.end(),LineRangeComp());
+    // search from lea
+    //findFourside();
+
+
+
+    for(int i=0;i<lines.size();i++){
+        // first find two front leg
+        for(int j=i+1;j<lines.size();j++){
+            auto l1 = lines[i];
+            auto l2 = lines[j];
+            type_util::Point2d
+                    l1_s(l1.getStart()[0], l1.getStart()[1]),
+                    l1_e(l1.getEnd()[0],l1.getEnd()[1]),
+                    l2_s(l2.getStart()[0], l2.getStart()[1]),
+                    l2_e(l2.getEnd()[0],l2.getEnd()[1]),
+                    intersect;
+            type_util::Point2d l1_c(0.5*(l1_s.x + l1_e.x),0.5*(l1_s.y + l1_e.y));
+            type_util::Point2d l2_c(0.5*(l2_s.x + l2_e.x),0.5*(l2_s.y + l2_e.y));
+            type_util::Point2d front_c(0.5*(l2_c.x + l1_c.x),0.5*(l2_c.y + l1_c.y));
+
+            // get line between two lines's center
+            double dist = geometry_util::PointToPointDistance(l1_c,l2_c);
+
+            double angle21 = atan2(l2_c.y - l1_c.y, l2_c.x - l1_c.x);
+
+            // get length
+
+            // get angle
+
+            bool cond1 = dist > min_front_len_ && dist < max_front_len_;
+            bool cond2 = angle21 > min_front_angle_ && angle21 < max_front_angle_;
+            bool cond3 = fabs(front_c.y) < max_front_y_;
+            bool cond4 = front_c.x < max_front_x_;
+
+
+            // if have found one shelf
+            latest_shelf_.findF1(l1_c,0.05);
+            latest_shelf_.findF2(l2_c,0.05);
+
+
+            // find front leg
+            if ( (latest_shelf_.valid_[2] == 1  && latest_shelf_.valid_[3] == 1 )|cond1&&cond2&&cond3&&cond4){
+
+                // try to find back leg
+                shelfDetectStage s ;
+                if (cond1&&cond2&&cond3&&cond4){
+                    s.f1_ = l1_c;
+                    s.f2_ = l2_c;
+                    s.setValidF1(1);
+                    s.setValidF2(1);
+
+                }else{
+                    if (latest_shelf_.findF1(l1_c,0.05)){
+                        s.f1_ = l1_c;
+                        s.setValidF1(1);
+
+
+                    }
+                    if (latest_shelf_.findF1(l2_c,0.05)){
+                        s.f1_ = l2_c;
+                        s.setValidF1(1);
+
+
+                    }
+                    if (latest_shelf_.findF2(l1_c,0.05)){
+                        s.f2_ = l1_c;
+                        s.setValidF2(1);
+
+
+                    }
+                    if (latest_shelf_.findF2(l1_c,0.05)){
+                        s.f2_ = l1_c;
+                        s.setValidF2(1);
+
+
+                    }
+
+                }
+
+                for (int k = i ;k <= j;k++){
+                    // b1 and b2
+                    auto l3 = lines[k];
+                    type_util::Point2d
+                            l3_s(l3.getStart()[0], l3.getStart()[1]),
+                            l3_e(l3.getEnd()[0],l3.getEnd()[1]);
+                    type_util::Point2d l3_c(0.5*(l3_s.x + l3_e.x),0.5*(l3_s.y + l3_e.y));
+
+                    // check condition
+                    double dist_31 = geometry_util::PointToPointDistance(l3_c,l1_c);
+                    double dist_32 = geometry_util::PointToPointDistance(l3_c,l2_c);
+
+                    double angle312 = angle21 - atan2(l3_c.y - l1_c.y, l3_c.x - l1_c.x);
+
+                    double angle321 = angle21 - atan2(l3_c.y - l2_c.y, l3_c.x - l2_c.x);
+
+                    bool cond5 = angle312 > 0.4*M_PI && angle312 < 0*6*M_PI;
+                    bool cond6 = dist_31>min_front_len_ && dist_31 < max_front_len_;
+
+                    bool cond7 = dist_32 > min_front_len_ && dist_32 < max_front_len_;
+
+                    bool cond8 = true;
+
+                    bool cond9;
+                    bool cond10;
+
+
+                    if (cond5 && cond6 && cond7){
+                        s.b1_ = l3_c;
+                        s.setValidB1(1);
+                        // update vec, compute score
+                        s.score_ = 0.0;
+
+                        shelfVec.push_back(s);
+                        continue;
+                    }
+
+                    if(cond8 && cond9 && cond1){
+                        s.b2_ = l3_c;
+                        s.setValidB2(1);
+                        // update vec, compute score
+                        s.score_ = 0.0;
+
+                        shelfVec.push_back(s);
+                        break;
+                    }
+
+                    // update vec, compute score
+                    s.score_ = 0.0;
+
+                    shelfVec.push_back(s);
+                }
+
+
+
+
+
+
+
+
+                //decide wheather to fing back leg
+
+
+
+            }
+
+
+
+
+
+
+
+        }
+
+
+
+
+    }
+
+
+    std::sort(shelfVec.begin(), shelfVec.end(),[](const shelfDetectStage &v1, const shelfDetectStage &v2){ return v2.score_>v1.score_; });
+
+
+
+
+
+
+
+
+    return targets;
+
+
+
+}
 
 
 
