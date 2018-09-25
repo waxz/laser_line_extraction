@@ -86,6 +86,10 @@ target_link_libraries(line_detector_ekf_node ${catkin_LIBRARIES})
 
 add_executable(triangle_sim_node src/triangle_sim.cpp)
 target_link_libraries(triangle_sim_node ${catkin_LIBRARIES})
+
+add_executable(marker_detector src/marker_detector.cpp)
+target_link_libraries(marker_detector line_detector_lib)
+
 # catkin_add_gtest(${PROJECT_NAME}-test test/test_laser_line_extraction.cpp)
 install(TARGETS line_detector_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 install(TARGETS shelf_detector_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})

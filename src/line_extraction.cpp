@@ -367,14 +367,23 @@ void LineExtraction::split(const std::vector<unsigned int>& indices)
   if (dist_max < params_.min_split_dist && gap_max < params_.max_line_gap)
   {
     lines_.push_back(line);
+
+    if (debug_){
+      ROS_ERROR("lsd get segment start = [ %.3f, %.3f ], end = [ %.3f, %.3f ],length = %.3f, angle = %.3f \n", line.getStart()[0],line.getStart()[1],line.getEnd()[0],line.getEnd()[1],line.length(), line.getAngle());
+    }
   }
   else
   {
     int i_split = dist_max >= params_.min_split_dist ? i_max : i_gap;
     std::vector<unsigned int> first_split(&indices[0], &indices[i_split - 1]);
     std::vector<unsigned int> second_split(&indices[i_split], &indices.back());
-    split(first_split);
-    split(second_split);
+    if (i_split >= params_.min_line_points){
+      split(first_split);
+    }
+    if (indices.size() - i_split >= params_.min_line_points){
+      split(second_split);
+
+    }
   }
 
 }

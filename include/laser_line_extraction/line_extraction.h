@@ -7,7 +7,7 @@
 #include <Eigen/Dense>
 #include "laser_line_extraction/utilities.h"
 #include "laser_line_extraction/line.h"
-
+#include <ros/ros.h>
 namespace line_extraction
 {
 
@@ -36,6 +36,7 @@ public:
   void setMinRange(double);
   void setMinSplitDist(double);
   void setOutlierDist(double);
+  bool debug_;
 
 private:
   // Data structures

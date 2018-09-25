@@ -88,6 +88,8 @@ void LineExtractionROS::loadParameters()
          max_line_gap, min_line_length, min_range, min_split_dist, outlier_dist;
   int min_line_points;
 
+  nh_local_.param("debug",line_extraction_.debug_, false );
+
   nh_local_.param<double>("bearing_std_dev", bearing_std_dev, 1e-3);
   line_extraction_.setBearingVariance(bearing_std_dev * bearing_std_dev);
   ROS_DEBUG("bearing_std_dev: %f", bearing_std_dev);

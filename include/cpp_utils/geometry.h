@@ -101,6 +101,18 @@ namespace geometry_util{
     double NormalAngle(double angle){
         return atan2(sin(angle),cos(angle));
     }
+
+    bool getPedal(type_util::Point2d L1_start, //Line 1 start
+                                type_util::Point2d L1_end, //Line 1 end
+                                type_util::Point2d p1, type_util::Point2d &pedal){
+        double yaw1 = atan2(L1_end.y - L1_start.y , L1_end.x - L1_start.x);
+        double yaw2 = yaw1 + 0.5*M_PI;
+        type_util::Point2d p2;
+        p2.x = p1.x + cos(yaw2);
+        p2.y = p1.y + sin(yaw2);
+
+        return LineLineIntersect(L1_start,L1_end,p1,p2,pedal);
+    }
 }
 
 

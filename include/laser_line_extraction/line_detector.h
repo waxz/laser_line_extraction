@@ -56,26 +56,39 @@ namespace line_extraction{
 
 
         // parameter
-        double range_min_;
+        double min_range_;
         double max_range_;
         double angle_min_;
         double angle_max_;
         double min_intensity_;
+        int filter_window_;
+
 
         bool debug_mode_;
+
+        // cache
+        // cache
+
+        valarray<float> cache_cos_;
+        valarray<float> cache_sin_;
+        valarray<float> cache_angle_;
 
 
         //result
         std::vector<line_extraction::Line> lines_;
         void processData();
         void initParam();
+        void cacheData();
 
     public:
+        enum detectMode{lines, segments};
         LineSegmentDetector(ros::NodeHandle nh, ros::NodeHandle nh_private);
         bool getLaser(sensor_msgs::LaserScan &scan);
+        bool getXsYs(valarray<float> &xs, valarray<float> &ys);
+
         void pubMarkers(std::vector<line_extraction::Line> lines);
         // get lines(0) or cluster(1)
-        std::vector<line_extraction::Line> getLines(int mode = 0);
+        std::vector<line_extraction::Line> getLines(detectMode mode = detectMode::lines);
     };
 
 
@@ -103,7 +116,6 @@ namespace line_extraction{
         ros::Publisher pointsPub_;
 
         // cache
-        sensor_msgs::LaserScan latestScan_;
 
         valarray<float> cache_cos_;
         valarray<float> cache_sin_;
@@ -133,10 +145,17 @@ namespace line_extraction{
 
         double triangle_direction_;
 
+        bool use_fit_line_;
+
+        string marker_type_;
+
         // method
         void initParams();
 
+        sensor_msgs::LaserScan latestScan_;
         void cacheData();
+        bool getXsYs(valarray<float> &xs, valarray<float> &ys);
+
         bool fitModel(vector<type_util::Point2d> & pointsInModel,double x0, double x1, double x2,geometry_msgs::PoseStamped & ModelPose);
 
     public:
@@ -231,6 +250,7 @@ namespace line_extraction{
 
         ros::Time lastOkTime_;
         int expire_sec_;
+        double detect_time_tol_;
 
 
         bool broadcast_tf_;

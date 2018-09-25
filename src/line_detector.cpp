@@ -1,5 +1,5 @@
 #include <laser_line_extraction/line_detector.h>
-
+#include <cpp_utils/svdlinefitting.h>
 
 // get laser data
 // mask valid data
@@ -25,10 +25,12 @@ line_extraction::LineSegmentDetector::LineSegmentDetector(ros::NodeHandle nh, ro
 }
 void line_extraction::LineSegmentDetector::initParam(){
     nh_private_.param("max_range",max_range_,1.0);
+    nh_private_.param("min_range",min_range_,0.02);
+
     nh_private_.param("min_angle",angle_min_,-0.5*M_PI);
     nh_private_.param("max_angle",angle_max_,0.5*M_PI);
     nh_private_.param("min_intensity",min_intensity_,100.0);
-
+    nh_private_.param("filter_window",filter_window_,4);
 
 };
 void line_extraction::LineSegmentDetector::processData(){
@@ -45,6 +47,30 @@ void line_extraction::LineSegmentDetector::processData(){
     r[r>float(max_range_)] = 0.0;
 
 
+#if 0
+    // filter
+    // get xs ys
+
+    valarray<float> xs, ys,Xs, Ys;
+    cacheData();
+    xs = r*cache_cos_;
+    ys = r*cache_sin_;
+    Xs = xs;
+    Ys = ys;
+
+    int wz = 2*filter_window_+1;
+
+    for(int ip = filter_window_ ;ip<xs.size() - filter_window_-1;ip++){
+        if (r[ip - filter_window_] == 0.0 || r[ip + filter_window_] == 0.0 ){
+            continue;
+        }
+        Xs[ip] = valarray<float>(xs[std::slice(ip - filter_window_,wz,1)]).sum()/(wz);
+        Ys[ip] = valarray<float>(ys[std::slice(ip - filter_window_,wz,1)]).sum()/(wz);
+    }
+
+    r = sqrt(Xs*Xs + Ys*Ys);
+
+#endif
     msg.ranges = container_util::createVectorFromValarray(r);
 
     boost::shared_ptr<sensor_msgs::LaserScan> scan_ptr_(boost::make_shared<sensor_msgs::LaserScan>(msg) );
@@ -52,7 +78,7 @@ void line_extraction::LineSegmentDetector::processData(){
     this->laserScanCallback(scan_ptr_);
 }
 
-std::vector<line_extraction::Line> line_extraction::LineSegmentDetector::getLines(int mode){
+std::vector<line_extraction::Line> line_extraction::LineSegmentDetector::getLines(detectMode mode){
     lines_.clear();
 
     // todo:debug with block
@@ -77,13 +103,14 @@ std::vector<line_extraction::Line> line_extraction::LineSegmentDetector::getLine
 
 
     // Extract the lines or cluster
-    if(mode == 0){
+    if(mode == detectMode::lines){
         this->line_extraction_.extractLines(lines_);
 
-    }else if(mode == 1){
+    }else if(mode == detectMode::segments){
         this->line_extraction_.extractSegments(lines_);
     }
     printf("get lines_ num = %d",int(lines_.size()));
+    std::cout<<std::endl;
     timer.stop();
     printf("time %.3f\n",timer.elapsedSeconds());
 
@@ -119,9 +146,26 @@ bool line_extraction::LineSegmentDetector::getLaser(sensor_msgs::LaserScan &scan
     return (!scan.ranges.empty());
 }
 
+void line_extraction::LineSegmentDetector::cacheData() {
+    if ( scan_data_.get()->ranges.size() == cache_angle_.size() && scan_data_.get()->angle_min == cache_angle_[0]){
+        return;
+    }
+    auto r = container_util::createValarrayFromVector(scan_data_.get()->ranges);
+    float angle_min = scan_data_.get()->range_min;
+    float angle_increment = scan_data_.get()->angle_increment;
+    for(int i =0;i<r.size();i++){
+        r[i]=angle_min + i*angle_increment;
+    }
+    cache_cos_ = cos(r);
+    cache_sin_ = sin(r);
+}
 
-
-
+bool line_extraction::LineSegmentDetector::getXsYs(valarray<float> &xs, valarray<float> &ys) {
+    cacheData();
+    auto ranges = container_util::createValarrayFromVector(scan_data_.get()->ranges);
+    xs = ranges*cache_cos_;
+    ys = ranges*cache_sin_;
+}
 
 
 #if 1
@@ -153,6 +197,11 @@ bool line_extraction::LineSegmentDetector::getLaser(sensor_msgs::LaserScan &scan
         nh_private_.param("max_fit_error",max_fit_error_, 0.01);
         nh_private_.param("triangle_direction",triangle_direction_, -1.0);
 
+        nh_private_.param("use_fit_line",use_fit_line_, false);
+
+        // marker type : light-belt, triangle, point-array
+        nh_private_.param("marker_type",marker_type_,std::string("light_belt"));
+
 
         //triangle_direction
 
@@ -173,6 +222,15 @@ bool line_extraction::LineSegmentDetector::getLaser(sensor_msgs::LaserScan &scan
 
     }
 
+bool line_extraction::SimpleTriangleDetector::getXsYs(valarray<float> &xs, valarray<float> &ys) {
+
+    lsd_.getLaser(latestScan_);
+    cacheData();
+    auto ranges = container_util::createValarrayFromVector(latestScan_.ranges);
+    xs = ranges*cache_cos_;
+    ys = ranges*cache_sin_;
+
+}
     bool line_extraction::SimpleTriangleDetector::fitModel(vector<type_util::Point2d> & pointsInModel,double x0, double x1, double x2,geometry_msgs::PoseStamped & ModelPose){
 
         targetPoints_.header = latestScan_.header;
@@ -200,7 +258,9 @@ bool line_extraction::LineSegmentDetector::getLaser(sensor_msgs::LaserScan &scan
             targetPoints_.poses.push_back(pose);
         }
 
+        // optimize param
         Eigen::VectorXd x(4);
+        // model param
         decltype(x) model(1);
 
         x(0) = x0;             // initial value for 'a'
@@ -283,7 +343,64 @@ bool line_extraction::LineSegmentDetector::getLaser(sensor_msgs::LaserScan &scan
         // get lines
         auto lines = lsd_.getLines();
 
-        // get pair
+        if (marker_type_ == "light-belt"){
+            if (lines.size() == 1){
+                auto lightLine = lines[0];
+
+                // fit line
+                vector<type_util::Point2d> pointInLine;
+                type_util::Point2d p;
+
+                valarray<float> xs ,ys;
+                lsd_.getXsYs(xs, ys);
+
+                auto indices = lightLine.getIndices();
+
+                for (int i=0;i<indices.size();i++){
+                    p.x = xs[indices[i]];
+                    p.y = ys[indices[i]];
+                    pointInLine.push_back(p);
+                }
+                double a,b,c;
+                fit_util::svdfit(pointInLine,a, b, c);
+                // ax + by = c;
+                // get two point
+                type_util::Point2d line_s(0.0, c/b), line_e(c/a, 0.0);
+                type_util::Point2d p1(lightLine.getStart()[0],lightLine.getStart()[1]);
+                type_util::Point2d p2(lightLine.getEnd()[0],lightLine.getEnd()[1]);
+
+                type_util::Point2d fit_s, fit_e;
+                bool suc1 = geometry_util::getPedal(line_s,line_e,p1,fit_s);
+                bool suc2 = geometry_util::getPedal(line_s,line_e,p1,fit_e);
+
+
+                geometry_msgs::PoseStamped pose;
+
+                if (suc1 &&suc2 && use_fit_line_){
+
+                    pose.pose.position.x = 0.5*( fit_s.x + fit_e.x);
+                    pose.pose.position.y = 0.5*( fit_s.y + fit_e.y);
+
+                    double  yaw = atan2(fit_e.y - fit_s.y, fit_e.x - fit_s.x) - 0.5*M_PI;
+                    auto q = tf_util::createQuaternionFromYaw(yaw);
+
+                    tf::quaternionTFToMsg(q,pose.pose.orientation);
+                }else{
+                    pose.pose.position.x = 0.5*( lightLine.getEnd()[0] + lightLine.getStart()[0]);
+                    pose.pose.position.y = 0.5*( lightLine.getEnd()[1] + lightLine.getStart()[1]);
+
+                    auto q = tf_util::createQuaternionFromYaw(lightLine.getAngle());
+
+                    tf::quaternionTFToMsg(q,pose.pose.orientation);
+                }
+
+                targets.push_back(pose);
+
+            }
+        } else if(marker_type_ == "triangle"){
+#if 1
+
+            // get pair
         int matchCnt = 0;
         std::vector<line_extraction::SimpleShape> pairResults;
         for(int i=0;i<lines.size();i++){
@@ -365,11 +482,9 @@ bool line_extraction::LineSegmentDetector::getLaser(sensor_msgs::LaserScan &scan
         // merger and remove noise
         if (!pairResults.empty()){
             // get laser
-            lsd_.getLaser(latestScan_);
-            cacheData();
-            auto ranges = container_util::createValarrayFromVector(latestScan_.ranges);
-            auto xs = ranges*cache_cos_;
-            auto ys = ranges*cache_sin_;
+            valarray<float > xs;
+            valarray<float > ys;
+            getXsYs(xs,ys);
 
 
             // grow
@@ -501,6 +616,10 @@ bool line_extraction::LineSegmentDetector::getLaser(sensor_msgs::LaserScan &scan
 
         }
 
+#endif
+        }
+
+
 
         return targets;
 
@@ -512,6 +631,37 @@ bool line_extraction::LineSegmentDetector::getLaser(sensor_msgs::LaserScan &scan
 
 
 namespace line_extraction{
+    class SimpleLightBeltDetector{
+    protected:
+        ros::NodeHandle nh_;
+        ros::NodeHandle nh_private_;
+        rosnode::Listener listener_;
+
+        string scan_topic_;
+        double min_intensity_;
+        double min_line_length_;
+
+        std::shared_ptr<sensor_msgs::LaserScan> scan_data_;
+
+        void initPrams(){
+            nh_private_.param("scan_topic", scan_topic_, string("scan_filtered"));
+            nh_private_.param("min_intensity",min_intensity_,1000.0);
+            nh_private_.param("min_line_length",min_line_length_,0.4);
+
+        }
+    public:
+        SimpleLightBeltDetector(ros::NodeHandle nh, ros::NodeHandle nh_private):
+                nh_(nh),
+        nh_private_(nh_private),
+        listener_(nh, nh_private){
+
+            auto res = listener_.createSubcriber<sensor_msgs::LaserScan>(scan_topic_,1);
+            scan_data_ = std::get<0>(res);
+
+        }
+
+
+    };
 
 }
 
@@ -524,7 +674,7 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
             fake_pose_topic_("triangle_pose"),
             pubThread_(50,fake_pose_topic_,nh),
             tfThread_(20),
-            smoothPose_(10),
+            smoothPose_(5),
             cmd_data_ptr_(std::make_shared<std_msgs::Header>())
     {
         pubthreadClass_.setTarget(pubThread_);
@@ -541,6 +691,7 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
         baseToLaser_tf_.setIdentity();
 
         nh_private_.param("expire_sec",expire_sec_,5);
+        nh_private_.param("detect_time_tol",detect_time_tol_, 0.5);
         lastOkTime_ = ros::Time::now();
 
         nh_private_.param("broadcast_tf",broadcast_tf_, false);
@@ -680,11 +831,19 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
 
             auto dur = tn -lastOkTime_;
 //            ROS_ERROR("dur time : %f",dur.toSec());
+            if (dur.toSec() < detect_time_tol_){
+
+                return;
+            } else{
+                triangle_in_base_.header.frame_id = "detect_failed" ;
+                lighthouse_pose_pub_.publish(triangle_in_base_);
+
+            }
             if(dur.toSec()<expire_sec_){
                 tf::Transform tranform_change,triangle_tf;
                 tranform_change.setIdentity();
                 bool get = listener_.getTransformChange("odom",base_frame_id_,tranform_change,
-                                             base_in_triangle_.header.stamp,tn,0.1,true);
+                                             base_in_triangle_.header.stamp,tn,0.01,false);
 //                ROS_ERROR("time : %f, get chane tf %d,x=%.3f,y=%.3f,yaw=%.3f",dur.toSec(), get,tranform_change.getOrigin().x(),tranform_change.getOrigin().y(),
 //                tf::getYaw(tranform_change.getRotation()));
 
@@ -716,8 +875,9 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
 #endif
                 tf::poseMsgToTF(triangle_in_base_.pose,triangle_tf);
                 tf::poseTFToMsg(tranform_change.inverse()*triangle_tf,triangle_in_base_.pose);
+#if 0
                 lighthouse_pose_pub_.publish(triangle_in_base_);
-
+#endif
 
             }else{
                 smoothPose_.clear();
@@ -906,7 +1066,7 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleShelfDetector::detect(
 
 
     // get all cluster with a small length
-    auto lines = lsd_.getLines(1);
+    auto lines = lsd_.getLines(line_extraction::LineSegmentDetector::detectMode::segments);
     // if get no lines ,return
     if (lines.empty()){
 
