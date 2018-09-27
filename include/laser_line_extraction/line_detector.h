@@ -85,6 +85,8 @@ namespace line_extraction{
         LineSegmentDetector(ros::NodeHandle nh, ros::NodeHandle nh_private);
         bool getLaser(sensor_msgs::LaserScan &scan);
         bool getXsYs(valarray<float> &xs, valarray<float> &ys);
+        bool getAngles(valarray<float> &angles);
+
 
         void pubMarkers(std::vector<line_extraction::Line> lines);
         // get lines(0) or cluster(1)
@@ -111,6 +113,8 @@ namespace line_extraction{
         // debug
         geometry_msgs::PoseStamped targetPose_;
         geometry_msgs::PoseArray targetPoints_;
+
+        XmlRpc::XmlRpcValue params_;
 
         ros::Publisher targetPub_;
         ros::Publisher pointsPub_;
@@ -153,8 +157,6 @@ namespace line_extraction{
         void initParams();
 
         sensor_msgs::LaserScan latestScan_;
-        void cacheData();
-        bool getXsYs(valarray<float> &xs, valarray<float> &ys);
 
         bool fitModel(vector<type_util::Point2d> & pointsInModel,double x0, double x1, double x2,geometry_msgs::PoseStamped & ModelPose);
 
@@ -341,6 +343,7 @@ namespace line_extraction{
                             + atan2(f2_.y - f1_.y, f2_.x - f1_.x) - 0.5*M_PI
                             + atan2(b2_.y - b1_.y, b2_.x - b1_.x) - 0.5*M_PI);
             }
+            return true;
 
         }
 

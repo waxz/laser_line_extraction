@@ -237,6 +237,41 @@ public:
 
 };
 
+// add test check three board detection accuracy
+// 1)line : with two end
+// 2)triangle : with side length and angle
+// 3)points : with 3 points
+
+// simple detector already has triangle and line
+// add record
+
+
+
+
+// aim at removing ros
+//
+
+
+
+//0) how to define template markers
+// data source
+// param data structure
+// way_point_id : map [for global localization], way_point_name [local localization and control]
+
+// map : all marker position in map frame, contaion position and orientation
+// aka a pose array
+// need a relative pose, add service
+
+// way point name : markers in base_link frame, contation pose and
+//1) detect all possile light point
+// create a kd tree
+// keep track of light point
+
+// how to determine the point detected is what you want or think
+
+// 2) get all combinition
+
+
 class SimpleLightBeltDetector{
 
 };

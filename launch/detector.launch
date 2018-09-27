@@ -30,22 +30,22 @@
         <param name="~least_sq_angle_thresh" value="0.01" />
         <param name="~least_sq_radius_thresh" value="0.01" />
         <param name="~max_line_gap" value="0.05" />
-        <param name="~min_line_length" value="0.36" />
+        <param name="~min_line_length" value="0.01" />
         <param name="~min_range" value="0.1" />
         <param name="~min_split_dist" value="0.05" />
         <param name="~outlier_dist" value="0.06" />
-        <param name="~min_line_points" value="5" />
+        <param name="~min_line_points" value="2" />
         <param name="~use_scan" value="false"/>
 
 
 
-        <param name="marker_type" value="light-belt"/>
+        <param name="marker_type" value="points-array"/>
         <param name="use_fit_line" value="false"/>
         <param name="debug" value="false"/>
         <param name="max_range" value="2.1"/>
         <param name="min_angle" value="-1.575"/>
         <param name="max_angle" value="1.575"/>
-        <param name="min_intensity" value="1000"/>
+        <param name="min_intensity" value="800"/>
 
         <param name="filter_window" value="4"/>
 
@@ -74,6 +74,17 @@
         <param name="broadcast_tf" value="false"/>
         <param name="pub_pose" value="true"/>
         <param name="triangle_direction" value="-1"/>
+
+        <rosparam>
+            points_array :
+              - x : 0.1
+                y : -0.16
+              - x : 0.1
+                y : 0.0
+              - x : 0.1
+                y : 0.2
+
+        </rosparam>
 
     </node>
 

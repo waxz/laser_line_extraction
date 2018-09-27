@@ -48,7 +48,7 @@ namespace tf_util {
         tf::Quaternion q = tf::createQuaternionFromYaw(yaw);
         q.normalize();
 
-        ROS_INFO_STREAM(q);  // Print the quaternion components (0,0,0,1)
+//        ROS_INFO_STREAM(q);  // Print the quaternion components (0,0,0,1)
         return q;
     }
 

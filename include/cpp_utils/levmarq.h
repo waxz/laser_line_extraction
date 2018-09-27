@@ -10,6 +10,7 @@
 
 #include "types.h"
 #include <unsupported/Eigen/NonLinearOptimization>
+#include "eigen_util.h"
 
 typedef std::vector<Eigen::Vector2d, Eigen::aligned_allocator<Eigen::Vector2d> > Point2DVector;
 
@@ -64,7 +65,8 @@ namespace opt_util {
         // Compute 'm' errors, one for each data point, for the given parameter values in 'x'
         virtual int operator()(const Eigen::VectorXd &x, Eigen::VectorXd &fvec) const = 0;
 
-        virtual void updataModel(const Eigen::VectorXd &model) = 0;
+        virtual void updataModel(const Eigen::MatrixXd &model) = 0;
+
         // 'm' pairs of (x, f(x))
         Eigen::MatrixXd measuredValues;
 
@@ -140,7 +142,9 @@ namespace opt_util {
 
         }
 
-        void updataModel(const Eigen::VectorXd &model) {
+
+
+        void updataModel(const Eigen::MatrixXd &model) {
             functor_.updataModel(model);
         }
 
@@ -178,8 +182,8 @@ namespace opt_util {
         }
 
         //update model param
-        void updataModel(const Eigen::VectorXd &model) {
-            paramAngle_ = model(0);
+        void updataModel(const Eigen::MatrixXd &model) {
+            paramAngle_ = model(0,0);
             modelUpdated_ = true;
         }
 
@@ -270,9 +274,10 @@ namespace opt_util {
         }
 
         //update model param
-        void updataModel(const Eigen::VectorXd &model) {
+
+        void updataModel(const Eigen::MatrixXd &model) {
             modelUpdated_ = true;
-            direction_ = model(0);
+            direction_ = model(0,0);
         }
 
         // predict
@@ -357,6 +362,59 @@ namespace opt_util {
 
 
     };
+
+    struct AngleFunctor : SimpleFunctor{
+        // define model param
+        bool modelUpdated_;
+        Eigen::MatrixXd model_;
+
+
+        AngleFunctor() {
+            modelUpdated_ = false;
+        }
+
+        //update model param
+
+        void updataModel(const Eigen::MatrixXd &model) {
+            modelUpdated_ = true;
+            model_ = model;
+        }
+
+        // predict
+        int operator()(const Eigen::VectorXd &x, Eigen::VectorXd &fvec) const {
+            // 'x' has dimensions n x 1
+            // It contains the current estimates for the parameters.
+
+            // ridge body transform
+            eigen_util::TransformationMatrix2d trans(x(0), x(1), x(2));
+
+
+
+
+            // 'fvec' has dimensions m x 1
+            // It will contain the error for each data point.
+
+
+            // measuredValues = [x ,y, yaw]
+            double inputX, inputY , predictValue;
+            double newX, newY;
+            // x = f(y)
+
+            for (int i = 0; i < values(); i++) {
+                Eigen::Vector2d input_x = model_.row(i);
+                input_x = trans*input_x;
+
+                predictValue = measuredValues(i, 0);
+
+                // error = y_true - y_predict
+                fvec(i) = predictValue - atan2(input_x(1), input_x(0));
+            }
+            return 0;
+        }
+
+
+    };
+
 
 }
 

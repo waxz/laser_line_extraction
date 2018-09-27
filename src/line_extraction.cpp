@@ -375,8 +375,8 @@ void LineExtraction::split(const std::vector<unsigned int>& indices)
   else
   {
     int i_split = dist_max >= params_.min_split_dist ? i_max : i_gap;
-    std::vector<unsigned int> first_split(&indices[0], &indices[i_split - 1]);
-    std::vector<unsigned int> second_split(&indices[i_split], &indices.back());
+    std::vector<unsigned int> first_split(&indices[0], &indices[i_split +1]);
+    std::vector<unsigned int> second_split(indices.begin() + i_split + 1, indices.end());
     if (i_split >= params_.min_line_points){
       split(first_split);
     }

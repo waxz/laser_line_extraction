@@ -1,5 +1,6 @@
 #include <laser_line_extraction/line_detector.h>
 #include <cpp_utils/svdlinefitting.h>
+#include <cpp_utils/eigen_util.h>
 
 // get laser data
 // mask valid data
@@ -150,14 +151,14 @@ void line_extraction::LineSegmentDetector::cacheData() {
     if ( scan_data_.get()->ranges.size() == cache_angle_.size() && scan_data_.get()->angle_min == cache_angle_[0]){
         return;
     }
-    auto r = container_util::createValarrayFromVector(scan_data_.get()->ranges);
-    float angle_min = scan_data_.get()->range_min;
+    cache_angle_ = container_util::createValarrayFromVector(scan_data_.get()->ranges);
+    float angle_min = scan_data_.get()->angle_min;
     float angle_increment = scan_data_.get()->angle_increment;
-    for(int i =0;i<r.size();i++){
-        r[i]=angle_min + i*angle_increment;
+    for(int i =0;i<cache_angle_.size();i++){
+        cache_angle_[i]=angle_min + i*angle_increment;
     }
-    cache_cos_ = cos(r);
-    cache_sin_ = sin(r);
+    cache_cos_ = cos(cache_angle_);
+    cache_sin_ = sin(cache_angle_);
 }
 
 bool line_extraction::LineSegmentDetector::getXsYs(valarray<float> &xs, valarray<float> &ys) {
@@ -165,6 +166,11 @@ bool line_extraction::LineSegmentDetector::getXsYs(valarray<float> &xs, valarray
     auto ranges = container_util::createValarrayFromVector(scan_data_.get()->ranges);
     xs = ranges*cache_cos_;
     ys = ranges*cache_sin_;
+}
+bool line_extraction::LineSegmentDetector::getAngles(valarray<float> &angles) {
+    cacheData();
+    angles = cache_angle_;
+    return true;
 }
 
 
@@ -209,28 +215,9 @@ bool line_extraction::LineSegmentDetector::getXsYs(valarray<float> &xs, valarray
 
     };
 
-    void line_extraction::SimpleTriangleDetector::cacheData(){
-        if ( latestScan_.ranges.size() == cache_angle_.size() && latestScan_.angle_min == cache_angle_[0]){
-            return;
-        }
-        auto r = container_util::createValarrayFromVector(latestScan_.ranges);
-        for(int i =0;i<r.size();i++){
-            r[i]=latestScan_.angle_min + i*latestScan_.angle_increment;
-        }
-        cache_cos_ = cos(r);
-        cache_sin_ = sin(r);
 
-    }
 
-bool line_extraction::SimpleTriangleDetector::getXsYs(valarray<float> &xs, valarray<float> &ys) {
 
-    lsd_.getLaser(latestScan_);
-    cacheData();
-    auto ranges = container_util::createValarrayFromVector(latestScan_.ranges);
-    xs = ranges*cache_cos_;
-    ys = ranges*cache_sin_;
-
-}
     bool line_extraction::SimpleTriangleDetector::fitModel(vector<type_util::Point2d> & pointsInModel,double x0, double x1, double x2,geometry_msgs::PoseStamped & ModelPose){
 
         targetPoints_.header = latestScan_.header;
@@ -261,13 +248,13 @@ bool line_extraction::SimpleTriangleDetector::getXsYs(valarray<float> &xs, valar
         // optimize param
         Eigen::VectorXd x(4);
         // model param
-        decltype(x) model(1);
+        Eigen::MatrixXd model(1,1);
 
         x(0) = x0;             // initial value for 'a'
         x(1) = x1;             // initial value for 'b'
         x(2) = x2;             // initial value for 'c'
         x(3) =  M_PI*120.0/180.0;
-        model(0) = triangle_direction_;
+        model(0,0) = triangle_direction_;
         ROS_INFO_STREAM("get init result \n"<<x);
 
 #if 1
@@ -398,6 +385,8 @@ bool line_extraction::SimpleTriangleDetector::getXsYs(valarray<float> &xs, valar
 
             }
         } else if(marker_type_ == "triangle"){
+
+            // first get parameter
 #if 1
 
             // get pair
@@ -484,7 +473,7 @@ bool line_extraction::SimpleTriangleDetector::getXsYs(valarray<float> &xs, valar
             // get laser
             valarray<float > xs;
             valarray<float > ys;
-            getXsYs(xs,ys);
+            lsd_.getXsYs(xs,ys);
 
 
             // grow
@@ -617,6 +606,103 @@ bool line_extraction::SimpleTriangleDetector::getXsYs(valarray<float> &xs, valar
         }
 
 #endif
+        } else if(marker_type_ == "points-array"){
+
+
+            // get params
+//            nh_private_.param("points_array",params_);
+            ros::param::getCached("~points_array",params_);
+
+
+            // get line segmentation
+            // use fake data for test
+
+            // a triangle with three points
+            type_util::Point2d p1, p2, p3;
+
+
+            p1.x = params_[0]["x"];
+            p1.y = params_[0]["y"];
+
+            p2.x = params_[1]["x"];
+            p2.y = params_[1]["y"];
+            p3.x = params_[2]["x"];
+            p3.y = params_[2]["y"];
+            // get 3 point
+            if (lines.size() == 3){
+                double marker_yaw1, marker_yaw2, marker_yaw3;
+                marker_yaw1 ;
+                auto id1 = lines[0].getIndices();
+                auto id2 = lines[1].getIndices();
+
+                auto id3 = lines[2].getIndices();
+
+
+                lsd_.getAngles(cache_angle_);
+                double marker1_yaw = valarray<float>(cache_angle_[std::slice(id1[0],id1.size(),1)]).sum()/id1.size();
+                double marker2_yaw = valarray<float>(cache_angle_[std::slice(id2[1],id2.size(),1)]).sum()/id2.size();
+                double marker3_yaw = valarray<float>(cache_angle_[std::slice(id3[2],id3.size(),1)]).sum()/id3.size();
+
+
+                Eigen::MatrixXd measureData(3,1);
+                Eigen::MatrixXd model(3,2);
+                Eigen::VectorXd x(3);
+
+
+                model << p1.x, p1.y,
+                        p2.x, p2.y,
+                        p3.x, p3.y;
+
+                measureData << marker1_yaw, marker2_yaw, marker3_yaw;
+                x << 0.0, 0.0, 0.0;
+
+                opt_util::SimpleSolver<opt_util::AngleFunctor> sm;
+                sm.updataModel(model);
+
+                sm.setParams(x);
+
+                sm.feedData(measureData);
+
+                int status = sm.solve();
+
+                auto meanerror = sm.getMeanError();
+
+                x = sm.getParam();
+
+                std::cout<<"get x \n"<<x<<std::endl << "error "<<meanerror << std::endl;
+
+                // get transform position
+                eigen_util::TransformationMatrix2d trans(x(0), x(1), x(2));
+                decltype(model) origin_pos = model.transpose();
+                std::cout << "get origin pose \n"<<origin_pos<<std::endl;
+
+                origin_pos = trans*origin_pos;
+                std::cout << "get transform pose \n"<<origin_pos<<std::endl;
+
+
+                geometry_msgs::PoseStamped pose;
+                pose.pose.position.x = origin_pos(0,1);
+                pose.pose.position.y = origin_pos(1,1);
+                double  yaw = atan2(origin_pos(1,1) - origin_pos(1,0), origin_pos(0,1) - origin_pos(0,0)) - 0.5*M_PI;
+                auto q = tf_util::createQuaternionFromYaw(yaw);
+
+                tf::quaternionTFToMsg(q,pose.pose.orientation);
+
+                if(latestScan_.header.frame_id == ""){
+                    lsd_.getLaser(latestScan_);
+
+                }
+                pose.header = latestScan_.header;
+
+
+                targetPub_.publish(pose);
+                targets.push_back(pose);
+
+
+            }
+
+
+
         }
 
 
@@ -975,13 +1061,13 @@ bool line_extraction::SimpleShelfDetector::fitModel(vector<type_util::Point2d> &
     }
 
     Eigen::VectorXd x(4);
-    decltype(x) model(1);
+    Eigen::MatrixXd model(1,1);
 
     x(0) = x0;             // initial value for 'a'
     x(1) = x1;             // initial value for 'b'
     x(2) = x2;             // initial value for 'c'
     x(3) =  M_PI*120.0/180.0;
-    model(0) = triangle_direction_;
+    model(0,0) = triangle_direction_;
     ROS_INFO_STREAM("get init result \n"<<x);
 
 #if 1
@@ -1198,7 +1284,7 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleShelfDetector::detect(
 
     if(!shelfVec.empty()){
         lsd_.getLaser(latestScan_);
-        cacheData();
+//        cacheData();
         auto ranges = container_util::createValarrayFromVector(latestScan_.ranges);
         auto xs = ranges*cache_cos_;
         auto ys = ranges*cache_sin_;
