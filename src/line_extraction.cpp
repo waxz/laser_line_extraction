@@ -39,9 +39,6 @@ void LineExtraction::extractLines(std::vector<Line>& lines)
   // Split indices into lines and filter out short and sparse lines
   split(filtered_indices_);
   filterLines();
-  if (lines_.size() != 3){
-    exit(1);
-  }
 
   // Fit each line using least squares and merge colinear lines
   for (std::vector<Line>::iterator it = lines_.begin(); it != lines_.end(); ++it)
