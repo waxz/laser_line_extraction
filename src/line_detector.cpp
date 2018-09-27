@@ -328,9 +328,10 @@ bool line_extraction::LineSegmentDetector::getAngles(valarray<float> &angles) {
     vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::detect(){
         vector<geometry_msgs::PoseStamped> targets;
         // get lines
-        auto lines = lsd_.getLines();
+
 
         if (marker_type_ == "light-belt"){
+            auto lines = lsd_.getLines();
             if (lines.size() == 1){
                 auto lightLine = lines[0];
 
@@ -385,6 +386,7 @@ bool line_extraction::LineSegmentDetector::getAngles(valarray<float> &angles) {
 
             }
         } else if(marker_type_ == "triangle"){
+            auto lines = lsd_.getLines();
 
             // first get parameter
 #if 1
@@ -607,53 +609,59 @@ bool line_extraction::LineSegmentDetector::getAngles(valarray<float> &angles) {
 
 #endif
         } else if(marker_type_ == "points-array"){
+            auto lines = lsd_.getLines(line_extraction::LineSegmentDetector::detectMode::segments);
 
+            // get 3 or 4 point
+            // 3: flat board
+            // 4 : shelf
+            bool board_or_board ;
 
             // get params
-//            nh_private_.param("points_array",params_);
+#if 0
+            nh_private_.param("points_array",params_);
+#endif
             ros::param::getCached("~points_array",params_);
+            board_or_board = params_.size() == 3;
+            if (params_.size() == 3){
+                board_or_board = true;
+            } else if (params_.size() == 4){
+                board_or_board = false;
+            } else{
+                return targets;
+            }
+
 
 
             // get line segmentation
-            // use fake data for test
 
-            // a triangle with three points
-            type_util::Point2d p1, p2, p3;
+            // get 3 or 4 point
+            int data_num = (board_or_board)? 3:4;
+
+            if (lines.size() == data_num){
 
 
-            p1.x = params_[0]["x"];
-            p1.y = params_[0]["y"];
-
-            p2.x = params_[1]["x"];
-            p2.y = params_[1]["y"];
-            p3.x = params_[2]["x"];
-            p3.y = params_[2]["y"];
-            // get 3 point
-            if (lines.size() == 3){
-                double marker_yaw1, marker_yaw2, marker_yaw3;
-                marker_yaw1 ;
-                auto id1 = lines[0].getIndices();
-                auto id2 = lines[1].getIndices();
-
-                auto id3 = lines[2].getIndices();
+                time_util::Timer timer;
+                timer.start();
 
 
                 lsd_.getAngles(cache_angle_);
-                double marker1_yaw = valarray<float>(cache_angle_[std::slice(id1[0],id1.size(),1)]).sum()/id1.size();
-                double marker2_yaw = valarray<float>(cache_angle_[std::slice(id2[1],id2.size(),1)]).sum()/id2.size();
-                double marker3_yaw = valarray<float>(cache_angle_[std::slice(id3[2],id3.size(),1)]).sum()/id3.size();
+
+                // matrix shape
+
+                Eigen::MatrixXd measureData(data_num,1);
+                Eigen::MatrixXd model(data_num,2);
+                Eigen::VectorXd x(data_num);
+
+                // fill data
+                for (int di = 0;di <data_num;di++){
+                    auto id1 = lines[di].getIndices();
+                    model(di,0) = params_[di]["x"];
+                    model(di,1) = params_[di]["y"];
+                    measureData(di,0) =  valarray<float>(cache_angle_[std::slice(id1[di],id1.size(),1)]).sum()/id1.size();
+                }
 
 
-                Eigen::MatrixXd measureData(3,1);
-                Eigen::MatrixXd model(3,2);
-                Eigen::VectorXd x(3);
-
-
-                model << p1.x, p1.y,
-                        p2.x, p2.y,
-                        p3.x, p3.y;
-
-                measureData << marker1_yaw, marker2_yaw, marker3_yaw;
+                // initial guess
                 x << 0.0, 0.0, 0.0;
 
                 opt_util::SimpleSolver<opt_util::AngleFunctor> sm;
@@ -671,6 +679,15 @@ bool line_extraction::LineSegmentDetector::getAngles(valarray<float> &angles) {
 
                 std::cout<<"get x \n"<<x<<std::endl << "error "<<meanerror << std::endl;
 
+                auto t = timer.elapsedSeconds();
+                ROS_INFO("fit time %.4f",t);
+                // check error
+                //rule 1: mean error
+                // rule 2: relative angle
+                if (meanerror > max_fit_error_  ){
+                    return targets;
+                }
+
                 // get transform position
                 eigen_util::TransformationMatrix2d trans(x(0), x(1), x(2));
                 decltype(model) origin_pos = model.transpose();
@@ -681,12 +698,32 @@ bool line_extraction::LineSegmentDetector::getAngles(valarray<float> &angles) {
 
 
                 geometry_msgs::PoseStamped pose;
-                pose.pose.position.x = origin_pos(0,1);
-                pose.pose.position.y = origin_pos(1,1);
-                double  yaw = atan2(origin_pos(1,1) - origin_pos(1,0), origin_pos(0,1) - origin_pos(0,0)) - 0.5*M_PI;
-                auto q = tf_util::createQuaternionFromYaw(yaw);
+                if (board_or_board){
+#if 0
+                    pose.pose.position.x = origin_pos(0,1);
+                    pose.pose.position.y = origin_pos(1,1);
+#endif
+#if 1
+                    Eigen::VectorXd m(2);
+                    m = origin_pos.rowwise().mean();
+                    pose.pose.position.x = m(0);
+                    pose.pose.position.y = m(1);
+#endif
+                    double  yaw = atan2(origin_pos(1,1) - origin_pos(1,0), origin_pos(0,1) - origin_pos(0,0)) - 0.5*M_PI;
+                    auto q = tf_util::createQuaternionFromYaw(yaw);
+                    tf::quaternionTFToMsg(q,pose.pose.orientation);
 
-                tf::quaternionTFToMsg(q,pose.pose.orientation);
+                } else{
+                    auto m = origin_pos.rowwise().mean();
+                    pose.pose.position.x = m(0);
+                    pose.pose.position.y = m(1);
+                    double  yaw = atan2(origin_pos(1,1) - origin_pos(1,0), origin_pos(0,1) - origin_pos(0,0)) ;
+                    auto q = tf_util::createQuaternionFromYaw(yaw);
+                    tf::quaternionTFToMsg(q,pose.pose.orientation);
+
+                }
+
+
 
                 if(latestScan_.header.frame_id == ""){
                     lsd_.getLaser(latestScan_);
@@ -696,6 +733,8 @@ bool line_extraction::LineSegmentDetector::getAngles(valarray<float> &angles) {
 
 
                 targetPub_.publish(pose);
+
+
                 targets.push_back(pose);
 
 
