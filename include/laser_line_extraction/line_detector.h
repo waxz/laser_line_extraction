@@ -109,6 +109,8 @@ namespace line_extraction{
         ros::NodeHandle nh_;
         ros::NodeHandle nh_private_;
         line_extraction::LineSegmentDetector lsd_;
+        rosnode::Listener listener_;
+
 
         // debug
         geometry_msgs::PoseStamped targetPose_;
@@ -152,6 +154,18 @@ namespace line_extraction{
         bool use_fit_line_;
 
         string marker_type_;
+
+        double max_marker_length_;
+        double max_marker_initial_dist_;
+
+
+        string odom_frame_id_;
+        string base_frame_id_;
+        string map_frame_id_;
+        tf::Transform baseToLaser_tf_;
+        tf::Transform odomToBase_tf_;
+        tf::Transform mapToOdom_tf_;
+
 
         // method
         void initParams();
@@ -257,7 +271,11 @@ namespace line_extraction{
 
         bool broadcast_tf_;
 
+        bool broadcast_map_odom_tf_;
+
         bool pub_pose_;
+
+        bool pub_lighthouse_;
 
         tf::Transform baseToLaser_tf_;
         geometry_msgs::PoseStamped base_in_triangle_;
@@ -292,7 +310,7 @@ namespace line_extraction{
  *             robot
  *
  * */
-
+#if 0
     struct shelfDetectStage{
         int stage_;
         type_util::Point2d f1_;
@@ -454,7 +472,7 @@ namespace line_extraction{
         vector<geometry_msgs::PoseStamped> detect();
     };
 
-
+#endif
 }
 
 

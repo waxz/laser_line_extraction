@@ -30,11 +30,11 @@
         <param name="~least_sq_angle_thresh" value="0.01" />
         <param name="~least_sq_radius_thresh" value="0.01" />
         <param name="~max_line_gap" value="0.05" />
-        <param name="~min_line_length" value="0.01" />
+        <param name="~min_line_length" value="0.02" />
         <param name="~min_range" value="0.1" />
         <param name="~min_split_dist" value="0.05" />
         <param name="~outlier_dist" value="0.06" />
-        <param name="~min_line_points" value="2" />
+        <param name="~min_line_points" value="3" />
         <param name="~use_scan" value="false"/>
 
 
@@ -42,10 +42,10 @@
         <param name="marker_type" value="points-array"/>
         <param name="use_fit_line" value="false"/>
         <param name="debug" value="false"/>
-        <param name="max_range" value="2.1"/>
+        <param name="max_range" value="5.1"/>
         <param name="min_angle" value="-1.575"/>
         <param name="max_angle" value="1.575"/>
-        <param name="min_intensity" value="800"/>
+        <param name="min_intensity" value="1200"/>
 
         <param name="filter_window" value="4"/>
 
@@ -75,14 +75,18 @@
         <param name="pub_pose" value="true"/>
         <param name="triangle_direction" value="-1"/>
 
+        <param name="broadcast_map_odom_tf" value="true" type="bool"/>
+        <param name="max_marker_length" value="0.08" type="double"/>
+        <param name="max_marker_initial_dist" value="5.5" type="double"/>
+
         <rosparam>
             points_array :
               - x : 0.1
-                y : -0.16
+                y : -0.18
               - x : 0.1
                 y : 0.0
               - x : 0.1
-                y : 0.2
+                y : 0.18
 
         </rosparam>
 

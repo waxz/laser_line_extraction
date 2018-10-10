@@ -401,7 +401,7 @@ namespace opt_util {
             // x = f(y)
 
             for (int i = 0; i < values(); i++) {
-                Eigen::Vector2d input_x = model_.row(i);
+                Eigen::Vector2d input_x = model_.col(i);
                 input_x = trans*input_x;
 
                 predictValue = measuredValues(i, 0);

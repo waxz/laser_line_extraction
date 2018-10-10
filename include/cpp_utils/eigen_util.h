@@ -110,6 +110,11 @@ namespace eigen_util{
             return res ;
         }
 
+        TransformationMatrix2d inverse(){
+            TransformationMatrix2d res(this->trans_.inverse());
+            return res ;
+        }
+
     };
 }
 
