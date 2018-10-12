@@ -86,7 +86,7 @@ void LineExtractionROS::loadParameters()
 
   double bearing_std_dev, range_std_dev, least_sq_angle_thresh, least_sq_radius_thresh,
          max_line_gap, min_line_length, min_range, min_split_dist, outlier_dist;
-  int min_line_points;
+  int min_line_points, max_indice_gap;
 
   nh_local_.param("debug",line_extraction_.debug_, false );
 
@@ -130,6 +130,9 @@ void LineExtractionROS::loadParameters()
   line_extraction_.setMinLinePoints(static_cast<unsigned int>(min_line_points));
   ROS_DEBUG("min_line_points: %d", min_line_points);
 
+  nh_local_.param<int>("max_indice_gap", max_indice_gap, 3);
+  line_extraction_.setMaxIndiceGap(static_cast<unsigned int>(max_indice_gap));
+  ROS_DEBUG("max_indice_gap: %d", max_indice_gap);
   ROS_DEBUG("*************************************");
 }
 

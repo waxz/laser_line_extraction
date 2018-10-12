@@ -81,7 +81,7 @@ namespace line_extraction{
         void cacheData();
 
     public:
-        enum detectMode{lines, segments};
+        enum detectMode{lines, segments, lights};
         LineSegmentDetector(ros::NodeHandle nh, ros::NodeHandle nh_private);
         bool getLaser(sensor_msgs::LaserScan &scan);
         bool getXsYs(valarray<float> &xs, valarray<float> &ys);
@@ -90,7 +90,7 @@ namespace line_extraction{
 
         void pubMarkers(std::vector<line_extraction::Line> lines);
         // get lines(0) or cluster(1)
-        std::vector<line_extraction::Line> getLines(detectMode mode = detectMode::lines);
+        void getLines(std::vector<line_extraction::Line> &line, detectMode mode = detectMode::lines);
     };
 
 
@@ -108,8 +108,8 @@ namespace line_extraction{
     protected:
         ros::NodeHandle nh_;
         ros::NodeHandle nh_private_;
-        line_extraction::LineSegmentDetector lsd_;
         rosnode::Listener listener_;
+        line_extraction::LineSegmentDetector lsd_;
 
 
         // debug
@@ -157,6 +157,8 @@ namespace line_extraction{
 
         double max_marker_length_;
         double max_marker_initial_dist_;
+        double max_marker_dist_diff_;
+
 
 
         string odom_frame_id_;

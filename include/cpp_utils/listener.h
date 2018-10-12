@@ -14,6 +14,7 @@
 //util
 #include <cpp_utils/container.h>
 #include <cpp_utils/tf.h>
+#include <cpp_utils/time.h>
 
 #include <vector>
 #include <string>
@@ -82,7 +83,7 @@ namespace rosnode {
         void callback(const typename T::ConstPtr &msg);
 
         template<class T>
-        void bindcallback(const typename T::ConstPtr &msg, std::shared_ptr<T> data);
+        void bindcallback(const boost::shared_ptr<T const> &msg, std::shared_ptr<T> data);
 
         virtual void doSomething() {}
 
@@ -160,8 +161,9 @@ namespace rosnode {
 
 
         ros::Subscriber chat_func_sub = n.subscribe<T>(topic, buffer_size,
-                                                       boost::bind(&Listener::bindcallback<T>, this, _1, data_ptr));
-
+                                                       boost::bind(&Listener::bindcallback<T>, this, _1, data_ptr),
+                                                       ros::VoidPtr(),
+                                                       ros::TransportHints().reliable().maxDatagramSize(10000).tcpNoDelay(true));
 
 
 //    ros::Subscriber chat_func_sub = nh_.subscribe(topic, 2, &Listener::callback<T>, this);
@@ -239,14 +241,14 @@ namespace rosnode {
     }
 
     template<class T>
-    void Listener::bindcallback(const typename T::ConstPtr &msg, std::shared_ptr<T> data) {
+    void Listener::bindcallback(const boost::shared_ptr<T const> &msg, std::shared_ptr<T> data) {
 
 
         // swap memory
         T m = *msg;
         std::swap(*data, m);
         updated_ = true;
-//        ROS_ERROR("get data updated_ ");
+          //ROS_ERROR_STREAM("get data updated_"   << m);
 
     }
 
@@ -269,11 +271,22 @@ namespace rosnode {
 
         }
 
+
+        ros::Rate r(1000);
         if (wait < 0 && !updated_) {
             while (ros::ok() && !updated_) {
-                callbackqueue_[topic].get()->callAvailable(ros::WallDuration(0.1));
-                ros::Rate(100);
-//                ROS_ERROR("get data");
+                callbackqueue_[topic].get()->callAvailable(ros::WallDuration(0.01));
+                if (updated_){
+                    break;
+                }
+                r.sleep();
+//                if (updated_){
+//                    r.sleep();
+//                }else{
+//                    break;
+//                }
+//
+//   ROS_ERROR("get data");
             }
 
 

@@ -21,6 +21,7 @@ public:
   // Run
   void extractLines(std::vector<Line>&);
   void extractSegments(std::vector<Line>&);
+  void extractLightBoards(std::vector<Line>&);
   // Data setting
   void setCachedData(const std::vector<double>&, const std::vector<double>&,
                      const std::vector<double>&, const std::vector<unsigned int>&);
@@ -36,6 +37,7 @@ public:
   void setMinRange(double);
   void setMinSplitDist(double);
   void setOutlierDist(double);
+  void setMaxIndiceGap(unsigned int);
   bool debug_;
 
 private:
@@ -56,6 +58,8 @@ private:
   void   filterLines();
   void   mergeLines();
   void   split(const std::vector<unsigned int>&);
+  void   splitIndice(const std::vector<unsigned int>&);
+
 };
 
 } // namespace line_extraction

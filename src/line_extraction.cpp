@@ -80,6 +80,32 @@ void LineExtraction::extractLines(std::vector<Line>& lines)
 
       lines = lines_;
     }
+    ///////////////////////////////////////////////////////////////////////////////
+// new segmentation function
+///////////////////////////////////////////////////////////////////////////////
+    void LineExtraction::extractLightBoards(std::vector<Line>& lines)
+    {
+        // Resets
+        filtered_indices_ = c_data_.indices;
+        lines_.clear();
+
+        // Filter indices
+        filterClosePoints();
+        filterOutlierPoints();
+
+        // Return no lines if not enough points left
+        if (filtered_indices_.size() <= std::max(params_.min_line_points, static_cast<unsigned int>(3)))
+        {
+            return;
+        }
+
+        // Split indices into lines and filter out short and sparse lines
+        splitIndice(filtered_indices_);
+        // split according to to indice distance
+
+
+        lines = lines_;
+    }
 ///////////////////////////////////////////////////////////////////////////////
 // Data setting
 ///////////////////////////////////////////////////////////////////////////////
@@ -158,6 +184,10 @@ void LineExtraction::setMinSplitDist(double value)
 void LineExtraction::setOutlierDist(double value)
 {
   params_.outlier_dist = value;
+}
+
+void LineExtraction::setMaxIndiceGap(unsigned int value) {
+  params_.max_indice_gap = value;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -385,6 +415,102 @@ void LineExtraction::split(const std::vector<unsigned int>& indices)
 
     }
   }
+
+}
+
+    ///////////////////////////////////////////////////////////////////////////////
+// Splitting points into lines
+///////////////////////////////////////////////////////////////////////////////
+void LineExtraction::splitIndice(const std::vector<unsigned int>& indices)
+{
+    // Don't split if only a single point (only occurs when orphaned by gap)
+    if (indices.size() <= 1)
+    {
+        return;
+    }
+
+    Line line(c_data_, r_data_, params_, indices);
+    line.endpointFit();
+    double dist_max = 0;
+    double gap_max = 0;
+    int indice_gap_max = 1;
+    double dist, gap, indice_gap;
+    int i_max = 0, i_gap = 0, i_indice_gap = 0;
+
+    // Find the farthest point and largest gap
+    for (std::size_t i = 1; i < indices.size() - 1; ++i)
+    {
+        dist = line.distToPoint(indices[i]);
+        if (dist > dist_max)
+        {
+            dist_max = dist;
+            i_max = i;
+        }
+        gap = distBetweenPoints(indices[i], indices[i+1]);
+        if (gap > gap_max)
+        {
+            gap_max = gap;
+            i_gap = i;
+        }
+        indice_gap = indices[i+1] - indices[i];
+        if (indice_gap > indice_gap_max)
+        {
+            indice_gap_max = indice_gap;
+            i_indice_gap = i;
+        }
+
+    }
+
+    // Check for gaps at endpoints
+    double gap_start = distBetweenPoints(indices[0], indices[1]);
+    int indice_gap_start = indices[1] - indices[0];
+    if (gap_start > gap_max)
+    {
+        gap_max = gap_start;
+        i_gap = 1;
+    }
+    if (indice_gap_start > indice_gap_max)
+    {
+        indice_gap_max = indice_gap_start;
+        i_indice_gap = 1;
+    }
+    double gap_end = distBetweenPoints(indices.rbegin()[1], indices.rbegin()[0]);
+    int indice_gap_end = indices.rbegin()[0]- indices.rbegin()[1];
+
+    if (gap_end > gap_max)
+    {
+        gap_max = gap_end;
+        i_gap = indices.size() - 1;
+    }
+    if (indice_gap_end > indice_gap_max)
+    {
+        indice_gap_max = indice_gap_end;
+        i_indice_gap = indices.size() - 1;
+    }
+
+    // Check if line meets requirements or should be split
+    if (dist_max < params_.min_split_dist && gap_max < params_.max_line_gap && indice_gap_max < params_.max_indice_gap)
+    {
+        lines_.push_back(line);
+
+        if (debug_){
+            ROS_ERROR("lsd get segment start = [ %.3f, %.3f ], end = [ %.3f, %.3f ],length = %.3f, angle = %.3f \n", line.getStart()[0],line.getStart()[1],line.getEnd()[0],line.getEnd()[1],line.length(), line.getAngle());
+        }
+    }
+    else
+    {
+        int i_split = dist_max >= params_.min_split_dist ? i_max : i_gap;
+        i_split = (indice_gap_max >= params_.max_indice_gap) ? i_indice_gap : i_split;
+        std::vector<unsigned int> first_split(&indices[0], &indices[i_split +1]);
+        std::vector<unsigned int> second_split(indices.begin() + i_split + 1, indices.end());
+        if (i_split + 1  >= params_.min_line_points){
+            split(first_split);
+        }
+        if (indices.size() - i_split -1 >= params_.min_line_points){
+            split(second_split);
+
+        }
+    }
 
 }
 

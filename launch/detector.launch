@@ -21,20 +21,27 @@
     <!--</node>-->
     
     <node name="line_detector_node" pkg="laser_line_extraction" type="line_detector_node">
-        <param name="~frequency" value="20.0" />
+        <param name="~frequency" value="50.0" />
         <param name="~frame_id" value="base_laser" />
-        <param name="~scan_topic" value="scan_filtered" />
+        <param name="~scan_topic" value="scan" />
         <param name="~publish_markers" value="true" />
         <param name="~bearing_std_dev" value="1e-5" />
         <param name="~range_std_dev" value="0.02" />
         <param name="~least_sq_angle_thresh" value="0.01" />
         <param name="~least_sq_radius_thresh" value="0.01" />
-        <param name="~max_line_gap" value="0.05" />
-        <param name="~min_line_length" value="0.02" />
+
         <param name="~min_range" value="0.1" />
-        <param name="~min_split_dist" value="0.05" />
+
         <param name="~outlier_dist" value="0.06" />
+
+        <param name="~min_split_dist" value="0.03" />
+        <param name="~max_line_gap" value="0.04" />
+        <param name="~max_indice_gap" value="3" />
+
+        <param name="~min_line_length" value="0.02" />
+
         <param name="~min_line_points" value="3" />
+
         <param name="~use_scan" value="false"/>
 
 
@@ -76,17 +83,17 @@
         <param name="triangle_direction" value="-1"/>
 
         <param name="broadcast_map_odom_tf" value="true" type="bool"/>
-        <param name="max_marker_length" value="0.08" type="double"/>
+        <param name="max_marker_length" value="0.09" type="double"/>
         <param name="max_marker_initial_dist" value="5.5" type="double"/>
 
         <rosparam>
             points_array :
               - x : 0.1
-                y : -0.18
+                y : -0.15
               - x : 0.1
                 y : 0.0
               - x : 0.1
-                y : 0.18
+                y : 0.15
 
         </rosparam>
 

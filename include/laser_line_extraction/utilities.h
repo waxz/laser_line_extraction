@@ -34,6 +34,7 @@ struct Params
   double min_split_dist;
   double outlier_dist;
   unsigned int min_line_points;
+  unsigned int max_indice_gap;
 };
 
 struct PointParams

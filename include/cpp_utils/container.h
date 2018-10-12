@@ -113,6 +113,42 @@ namespace container_util {
 
     }
 
+    template <class T>
+    int argMax(const T &vec){
+        if (vec.empty()){
+            std::cerr << "get empty array !"<<std::endl;
+            return 0;
+        }
+        auto v_max = vec[0];
+        int i_max = 0;
+        for(int i= 0;i < vec.size();i++){
+            if (vec[i] > v_max){
+                v_max = vec[i];
+                i_max = i;
+            }
+        }
+
+        return i_max;
+    }
+
+    template <class T>
+    int argMin(const T &vec){
+        if (vec.empty()){
+            std::cerr << "get empty array !"<<std::endl;
+            return 0;
+        }
+        auto v_min = vec[0];
+        int i_min = 0;
+        for(int i= 0;i < vec.size();i++){
+            if (vec[i] < v_min){
+                v_min = vec[i];
+                i_min = i;
+            }
+        }
+
+        return i_min;
+    }
+
     /*
 
     std::vector<int> v;                   // no default init

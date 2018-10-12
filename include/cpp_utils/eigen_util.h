@@ -61,6 +61,7 @@ namespace eigen_util{
 
         TransformationMatrix2d& operator = (const Eigen::Matrix3d &matrix){
             trans_ = matrix;
+            return *this;
         }
 
         TransformationMatrix2d (const Eigen::Matrix3d &matrix){

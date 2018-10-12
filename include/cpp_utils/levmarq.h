@@ -118,7 +118,7 @@ namespace opt_util {
 
         void feedData(const Eigen::MatrixXd &data) {
             measuredValues = data;
-            m = static_cast<int>(data.rows());
+            m = static_cast<int>(data.cols());
 
         }
 
@@ -225,8 +225,8 @@ namespace opt_util {
 
 
                 for (int i = 0; i < values(); i++) {
-                    inputValue = measuredValues(i, 1);
-                    predictValue = measuredValues(i, 0);
+                    inputValue = measuredValues(1, i);
+                    predictValue = measuredValues(0, i);
 
                     // error = y_true - y_predict
                     fvec(i) = predictValue - ((inputValue < y0) ? x0 + (inputValue - y0) / k1 : x0 + (inputValue - y0) / k2);
@@ -244,8 +244,8 @@ namespace opt_util {
 
 
                 for (int i = 0; i < values(); i++){
-                    inputValue = measuredValues(i, 0);
-                    predictValue = measuredValues(i, 1);
+                    inputValue = measuredValues(0, i);
+                    predictValue = measuredValues(1, i);
 
                     // error = y_true - y_predict
                     fvec(i) = predictValue - ((inputValue < x0) ? y0 + (inputValue - x0) * k1 : y0 + (inputValue - x0) * k2);
@@ -320,8 +320,8 @@ namespace opt_util {
 
 
                 for (int i = 0; i < values(); i++) {
-                    inputValue = measuredValues(i, 1);
-                    predictValue = measuredValues(i, 0);
+                    inputValue = measuredValues(1, i);
+                    predictValue = measuredValues(0, i);
 
                     // error = y_true - y_predict
                     fvec(i) = predictValue - ((inputValue < y0) ? x0 + (inputValue - y0) / k1 : x0 + (inputValue - y0) / k2);
@@ -342,8 +342,8 @@ namespace opt_util {
 
 
                 for (int i = 0; i < values(); i++){
-                    inputValue = measuredValues(i, 0);
-                    predictValue = measuredValues(i, 1);
+                    inputValue = measuredValues(0, i);
+                    predictValue = measuredValues(1, i);
 
                     // error = y_true - y_predict
                     fvec(i) = predictValue - ((inputValue < x0) ? y0 + (inputValue - x0) * k1 : y0 + (inputValue - x0) * k2);
@@ -363,6 +363,7 @@ namespace opt_util {
 
     };
 
+    // fit transformation with only laser angle data
     struct AngleFunctor : SimpleFunctor{
         // define model param
         bool modelUpdated_;
@@ -394,17 +395,17 @@ namespace opt_util {
             // 'fvec' has dimensions m x 1
             // It will contain the error for each data point.
 
+            // model
 
-            // measuredValues = [x ,y, yaw]
-            double inputX, inputY , predictValue;
-            double newX, newY;
+            // measuredValues = [yaw]
+            double predictValue;
             // x = f(y)
 
             for (int i = 0; i < values(); i++) {
                 Eigen::Vector2d input_x = model_.col(i);
                 input_x = trans*input_x;
 
-                predictValue = measuredValues(i, 0);
+                predictValue = measuredValues(0, i);
 
                 // error = y_true - y_predict
                 fvec(i) = predictValue - atan2(input_x(1), input_x(0));
@@ -415,6 +416,65 @@ namespace opt_util {
 
     };
 
+    struct AngleRangeFunctor : SimpleFunctor{
+        // define model param
+        bool modelUpdated_;
+        Eigen::MatrixXd model_;
+
+
+        AngleRangeFunctor() {
+            modelUpdated_ = false;
+        }
+
+        //update model param
+
+        void updataModel(const Eigen::MatrixXd &model) {
+            modelUpdated_ = true;
+            model_ = model;
+        }
+
+        // predict
+        int operator()(const Eigen::VectorXd &x, Eigen::VectorXd &fvec) const {
+            // 'x' has dimensions n x 1
+            // It contains the current estimates for the parameters.
+
+            // ridge body transform
+            eigen_util::TransformationMatrix2d trans(x(0), x(1), x(2));
+
+
+
+
+            // 'fvec' has dimensions m x 1
+            // It will contain the error for each data point.
+
+
+            // measuredValues = [x ,y, x_model, y_model]
+            // x = f(y)
+            // cache matrix
+            Eigen::MatrixXd measuredX = measuredValues.block(0,0,2,values());
+            Eigen::MatrixXd modelX = measuredValues.block(2,0,2,values());
+
+            modelX = trans*modelX;
+
+
+            fvec = (measuredX - modelX).colwise().norm();
+
+#if 0
+            for (int i = 0; i < values(); i++) {
+                Eigen::Vector2d input_x = cache_input.col(measuredValues(2, i));
+
+                Eigen::Vector2d measuredX = measuredValues.block(0,i,2,1);
+
+
+                // error = y_true - y_predict
+                fvec(i) = (measuredX - input_x).norm();
+            }
+#endif
+            return 0;
+        }
+
+
+    };
 
 }
 

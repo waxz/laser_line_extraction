@@ -42,6 +42,7 @@ void line_extraction::LineSegmentDetector::processData(){
     // set intesity < min_intensity to 0
     auto msg = *scan_data_;
 
+
     valarray<float> r = container_util::createValarrayFromVector(msg.ranges);
     valarray<float> i = container_util::createValarrayFromVector(msg.intensities);
     r[i<float(min_intensity_)] = 0.0;
@@ -79,22 +80,32 @@ void line_extraction::LineSegmentDetector::processData(){
     this->laserScanCallback(scan_ptr_);
 }
 
-std::vector<line_extraction::Line> line_extraction::LineSegmentDetector::getLines(detectMode mode){
-    lines_.clear();
-
-    bool getMsg;
-    getMsg = listener.getOneMessage(this->scan_topic_,-1);
-
-    if (!getMsg){
-        std::cout<<std::endl;
-
-        return lines_;
-    }
-    std::cout<<std::endl;
+void line_extraction::LineSegmentDetector::getLines( std::vector<line_extraction::Line> &line, detectMode mode){
+    line.clear();
     time_util::Timer timer;
     timer.start();
 
+    bool getMsg;
+    getMsg = listener.getOneMessage(this->scan_topic_,-1);
+#if 0
+    if (!getMsg){
+        std::cout<<std::endl;
 
+        return ;
+    }
+#endif
+    timer.stop();
+    std::cout<<std::endl;
+
+    printf("wait msg  time %.6f\n",timer.elapsedSeconds());
+    std::cout<<std::endl;
+
+    timer.start();
+
+#if 0
+    printf("line_extraction_ time %.6f\n",timer.elapsedSeconds());
+    std::cout<<std::endl;
+#endif
     // process data
     // get ptr from msg
     // https://answers.ros.org/question/196697/get-constptr-from-message/
@@ -104,27 +115,35 @@ std::vector<line_extraction::Line> line_extraction::LineSegmentDetector::getLine
 
     // Extract the lines or cluster
     if(mode == detectMode::lines){
-        this->line_extraction_.extractLines(lines_);
+        this->line_extraction_.extractLines(line);
 
     }else if(mode == detectMode::segments){
-        this->line_extraction_.extractSegments(lines_);
+        this->line_extraction_.extractSegments(line);
+    }else if (mode == detectMode::lights){
+        this->line_extraction_.extractLightBoards(line);
     }
-    printf("get lines_ num = %d",int(lines_.size()));
-    std::cout<<std::endl;
+    printf("get lines_ num = %d",int(line.size()));
     timer.stop();
-    printf("time %.3f\n",timer.elapsedSeconds());
+    std::cout<<std::endl;
 
+    printf("line_extraction_ time %.6f\n",timer.elapsedSeconds());
+    std::cout<<std::endl;
+
+    timer.start();
 
     // Also publish markers if parameter publish_markers is set to true
     if (this->pub_markers_)
     {
 #if 1
-        pubMarkers(lines_);
+        pubMarkers(line);
 #endif
     }
+    timer.stop();
+    std::cout<<std::endl;
 
+    printf("pub_markers_ time %.6f\n",timer.elapsedSeconds());
+    std::cout<<std::endl;
 
-    return lines_;
 
 }
 
@@ -237,10 +256,10 @@ bool line_extraction::LineSegmentDetector::getAngles(valarray<float> &angles) {
 
         // convert points to Eigen
         int m = pointsInModel.size();
-        Eigen::MatrixXd measuredValues(m, 2);
+        Eigen::MatrixXd measuredValues(2, m);
         for (int i = 0; i < m; i++) {
-            measuredValues(i, 0) = pointsInModel[i].x;
-            measuredValues(i, 1) = pointsInModel[i].y;
+            measuredValues(0, i) = pointsInModel[i].x;
+            measuredValues(1, i) = pointsInModel[i].y;
 
             pose.position.x = pointsInModel[i].x;
             pose.position.y = pointsInModel[i].y;
@@ -344,7 +363,8 @@ bool line_extraction::LineSegmentDetector::getAngles(valarray<float> &angles) {
 
 
         if (marker_type_ == "light-belt"){
-            auto lines = lsd_.getLines();
+            std::vector<line_extraction::Line> lines;
+            lsd_.getLines(lines);
             if (lines.size() == 1){
                 auto lightLine = lines[0];
 
@@ -399,7 +419,8 @@ bool line_extraction::LineSegmentDetector::getAngles(valarray<float> &angles) {
 
             }
         } else if(marker_type_ == "triangle"){
-            auto lines = lsd_.getLines();
+            std::vector<line_extraction::Line> lines;
+            lsd_.getLines(lines);
 
             // first get parameter
 #if 1
@@ -622,18 +643,30 @@ bool line_extraction::LineSegmentDetector::getAngles(valarray<float> &angles) {
 
 #endif
         } else if(marker_type_ == "points-array"){
-            //todo; get line segments as small as posiible, tune parameter
-            // set up strong condition, detect order right to left
-
-
-
-
 
             std::cout<<"start get lines "<< std::endl;
 
-            auto lines = lsd_.getLines(line_extraction::LineSegmentDetector::detectMode::segments);
+            // cheange detector to simple detector
+            //
+            time_util::Timer timer;
+            timer.start();
 
+            std::vector<line_extraction::Line> lines;
+            lsd_.getLines(lines, line_extraction::LineSegmentDetector::detectMode::lights);
+
+#if 1
+            timer.stop();
+            std::cout<<std::endl;
+
+            printf("lsd_.getLines time %.6f\n",timer.elapsedSeconds());
+            std::cout<<std::endl;
+#endif
             std::cout<<"get lines "<< lines.size()<< std::endl;
+
+#if 1
+            // todo :bypass debug line_detector
+            return targets;
+#endif
 
             // get 3 or 4 point
             // 3: flat board
@@ -662,64 +695,53 @@ bool line_extraction::LineSegmentDetector::getAngles(valarray<float> &angles) {
             int data_num = (board_or_shelf)? 3:4;
 
             if (lines.size() >= data_num){
-
-
-
-
-
+                // timer to record run time
                 time_util::Timer timer;
                 timer.start();
 
 
+                // get laserscan angle data
                 lsd_.getAngles(cache_angle_);
+                lsd_.getLaser(latestScan_);
 
-                // matrix shape
 
-                Eigen::MatrixXd measureData(data_num,1);
+                // eigen matrix
+                // model 1 data [angle]
+                Eigen::MatrixXd measureData(1, data_num);
+                // model 2 data [x,y,idx] , idx = match index in model
+                Eigen::MatrixXd measureData2;
+
                 Eigen::MatrixXd model(2,data_num);
                 Eigen::VectorXd x(data_num);
 
-                // fill data
+                // fill model data
                 for (int di = 0;di <data_num;di++){
                     auto id1 = lines[di].getIndices();
                     model(0,di) = params_[di]["x"];
                     model(1,di) = params_[di]["y"];
                 }
 
-
-
-
-
-                lsd_.getLaser(latestScan_);
+                // look up tf
                 ros::Time tn = ros::Time::now();
-
 #if 1
                 // get base im map tf
                 // transform model point to vase frame;
-                bool gettf;
                 std::cout<<"looking up tf "<< std::endl;
 
                 // look up base to laser frame for once
-
                 if(baseToLaser_tf_.getOrigin().x() == 0.0){
-                    gettf = listener_.getTransform(base_frame_id_,latestScan_.header.frame_id,baseToLaser_tf_,tn,0.1,
+                    listener_.getTransform(base_frame_id_,latestScan_.header.frame_id,baseToLaser_tf_,tn,0.1,
                                                    true);
-
                 }
 
-
-
                 // get map odom tf
-                bool gettf1 = listener_.getTransform(map_frame_id_,odom_frame_id_,mapToOdom_tf_,tn,0.1,
+                bool gettf1 = listener_.getTransform(map_frame_id_,odom_frame_id_,mapToOdom_tf_,tn,0.01,
                                                false);
-
 
                 // get odom base tf
                 // look up odom to base tf
-                bool gettf2 = listener_.getTransform(odom_frame_id_,base_frame_id_,odomToBase_tf_,tn,0.1,
+                bool gettf2 = listener_.getTransform(odom_frame_id_,base_frame_id_,odomToBase_tf_,tn,0.01,
                                                false);
-
-
 
                 if ( ! gettf1 || ! gettf2 ){
                     return targets;
@@ -732,68 +754,138 @@ bool line_extraction::LineSegmentDetector::getAngles(valarray<float> &angles) {
                 tf::Transform mapToLaser_tf = mapToOdom_tf_*odomToBase_tf_*baseToLaser_tf_;
                 // get relative pose in laser frame
 
+
+                // tranform model data to relative position
                 decltype(model) origin_pos = model;
+                std::cout << "get model pose \n"<<model<<std::endl;
+
 
                 eigen_util::TransformationMatrix2d trans_laser(mapToLaser_tf.getOrigin().x(), mapToLaser_tf.getOrigin().y(), tf::getYaw(mapToLaser_tf.getRotation()));
                 model = trans_laser.inverse()*model;
 
-                std::cout << "get model pose \n"<<model<<std::endl;
+                std::cout << "get relative model pose \n"<<model<<std::endl;
 
                 // check markers base  on distance
                 // new lines vector
-                decltype(lines) new_lines ;
-                Eigen::VectorXd model_m(2);
+                //
+                std::vector<double > diff_score_vec;
 
-                model_m = model.rowwise().mean();
-                type_util::Point2d model_point;
-                model_point.x = model_m(0);
-                model_point.y = model_m(1);
-                for (int i = 0; i< lines.size();i++){
+                for (int i = 0; i<= lines.size() - data_num ;i++){
 
-                    auto l = lines[i];
-                    if (l.length() > max_marker_length_){
-                        continue;
+                    decltype(lines) line_select;
+
+                    line_select = decltype(lines)(&lines[i], &lines[i+data_num] );
+
+                    // check dist btween pair
+                    double check_dist_diff;
+                    for(int j = 0; j < data_num - 1; j++){
+                        for (int k= 1 ;k < data_num; k++){
+                            auto l1 = line_select[i], l2 = lines[j];
+
+                            type_util::Point2d p1(0.5*(l1.getStart()[0] + l1.getEnd()[0]),0.5*(l1.getStart()[1] + l1.getEnd()[1])),
+                                    p2(0.5*(l2.getStart()[0] + l2.getEnd()[0]),0.5*(l2.getStart()[1] + l2.getEnd()[1])),
+                                    m1(model(0,i),model(1,i)), m2(model(0,j),model(1,j));
+
+                            if (l1.length() > max_marker_length_ || l2.length() > max_marker_length_){
+                                check_dist_diff = 10.0;
+                                break;
+                            }
+
+                            double dist1 = geometry_util::PointToPointDistance(p1,p2);
+                            double dist2 = geometry_util::PointToPointDistance(m1,m2);
+
+                            double diff = fabs(dist1 - dist2);
+                            if(diff > check_dist_diff){
+                                check_dist_diff = diff;
+                            }
+                            if(check_dist_diff > max_marker_dist_diff_){
+                                break;
+                            }
+
+
+
+                        }
+                        if(check_dist_diff > max_marker_dist_diff_){
+                            break;
+                        }
                     }
-                    type_util::Point2d p;
-                    p.x = 0.5*(l.getStart()[0] + l.getEnd()[0]);
-                    p.y = 0.5*(l.getStart()[1] + l.getEnd()[1]);
 
-                    double dist = geometry_util::PointToPointDistance(model_point,p);
+                    diff_score_vec.push_back(check_dist_diff);
 
-                    if (dist > max_marker_initial_dist_){
-                        continue;
-                    }
 
-                    new_lines.push_back(lines[i]);
                 }
 
-                if (new_lines.size() != data_num){
-                    return targets;
-                }
+                // get best choice
+                auto best_i = container_util::argMin(diff_score_vec);
+                auto best_score = diff_score_vec[best_i];
 
+
+                lines =  decltype(lines)(&lines[best_i], &lines[best_i+data_num] );
+
+                // fit two model
+                // model 1) : angle only model
+                // model 2) : 2d position model
+
+
+
+                // model 1
+                // fill measureData from laser
                 for (int di = 0;di <data_num;di++){
                     auto id1 = lines[di].getIndices();
-                    measureData(di,0) =  valarray<float>(cache_angle_[std::slice(id1[di],id1.size(),1)]).sum()/id1.size();
+                    measureData(0,di) =  valarray<float>(cache_angle_[std::slice(id1[di],id1.size(),1)]).sum()/id1.size();
                 }
+
+                // model 2
+                int points_cnt = 0;
+                std::vector<double> mdata;
+                std::valarray<float > xs, ys;
+                lsd_.getXsYs(xs,ys);
+                for(int di = 0 ; di<2 ;di ++){
+                    auto id1 = lines[di].getIndices();
+
+                    for (int dj=0;dj < id1.size(); dj++){
+
+                        // push x
+                        mdata.push_back(static_cast<double> (xs[id1[dj]]) );
+                        // y
+                        mdata.push_back(static_cast<double> (ys[id1[dj]]) );
+                        // index
+                        mdata.push_back(model(0,di));
+                        mdata.push_back(model(1,di));
+
+                    }
+                }
+                measureData2 = Eigen::Map<Eigen::MatrixXd>(mdata.data(), 4, mdata.size()/4);
+
 
 
                 // initial guess
                 x << 0.0, 0.0, 0.0;
 
                 opt_util::SimpleSolver<opt_util::AngleFunctor> sm;
+                opt_util::SimpleSolver<opt_util::AngleRangeFunctor> sm2;
+
                 sm.updataModel(model);
+                sm2.updataModel(model);
 
                 sm.setParams(x);
+                sm2.setParams(x);
 
                 sm.feedData(measureData);
+                sm2.feedData(measureData2);
 
                 int status = sm.solve();
-
+#if 1
+                int ststus2 = sm2.solve();
+#endif
                 auto meanerror = sm.getMeanError();
+                auto meanerror2 = sm2.getMeanError();
 
                 x = sm.getParam();
+                auto x2 = sm2.getParam();
 
                 std::cout<<"get x \n"<<x<<std::endl << "error "<<meanerror << std::endl;
+                std::cout<<"get x2 \n"<<x2<<std::endl << "error "<<meanerror2 << std::endl;
 
                 auto t = timer.elapsedSeconds();
                 ROS_INFO("fit time %.4f",t);
@@ -806,11 +898,14 @@ bool line_extraction::LineSegmentDetector::getAngles(valarray<float> &angles) {
 
                 // get transform position
                 eigen_util::TransformationMatrix2d trans(x(0), x(1), x(2));
+                eigen_util::TransformationMatrix2d trans2(x2(0), x2(1), x2(2));
+
                 std::cout << "get origin pose \n"<<origin_pos<<std::endl;
 
                 decltype(model) pos = trans*model;
                 std::cout << "get transform pose \n"<<pos<<std::endl;
-
+                decltype(model) pos2 = trans2*model;
+                std::cout << "get transform pose2 \n"<<pos2<<std::endl;
 
                 geometry_msgs::PoseStamped origin_pose;
 
@@ -963,10 +1058,10 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
             sd_(nh,nh_private),
             listener_(nh,nh_private),
             fake_pose_topic_("triangle_pose"),
-            pubThread_(50,fake_pose_topic_,nh),
-            tfThread_(20),
+            cmd_data_ptr_(std::make_shared<std_msgs::Header>()),
             smoothPose_(2),
-            cmd_data_ptr_(std::make_shared<std_msgs::Header>())
+            pubThread_(50,fake_pose_topic_,nh),
+            tfThread_(20)
     {
         pubthreadClass_.setTarget(pubThread_);
         tfthreadClass_.setTarget(tfThread_);
