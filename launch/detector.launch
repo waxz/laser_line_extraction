@@ -40,7 +40,7 @@
 
         <param name="~min_line_length" value="0.02" />
 
-        <param name="~min_line_points" value="3" />
+        <param name="~min_line_points" value="4" />
 
         <param name="~use_scan" value="false"/>
 
@@ -85,15 +85,16 @@
         <param name="broadcast_map_odom_tf" value="true" type="bool"/>
         <param name="max_marker_length" value="0.09" type="double"/>
         <param name="max_marker_initial_dist" value="5.5" type="double"/>
+        <param name="max_marker_dist_diff" value="0.05" type="double"/>
 
         <rosparam>
             points_array :
-              - x : 0.1
-                y : -0.15
-              - x : 0.1
-                y : 0.0
-              - x : 0.1
-                y : 0.15
+              - x : -4.65
+                y : -0.115
+              - x : -4.3
+                y : -0.115
+              - x : -3.95
+                y : -0.115
 
         </rosparam>
 

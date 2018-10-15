@@ -159,6 +159,9 @@ namespace line_extraction{
         double max_marker_initial_dist_;
         double max_marker_dist_diff_;
 
+        double min_update_d_;
+        double min_update_a_;
+
 
 
         string odom_frame_id_;
@@ -167,6 +170,8 @@ namespace line_extraction{
         tf::Transform baseToLaser_tf_;
         tf::Transform odomToBase_tf_;
         tf::Transform mapToOdom_tf_;
+        geometry_msgs::PoseStamped map_odom_pose_;
+
 
 
         // method
@@ -178,6 +183,7 @@ namespace line_extraction{
 
     public:
         SimpleTriangleDetector(ros::NodeHandle nh, ros::NodeHandle nh_private);
+        ~SimpleTriangleDetector();
         vector<geometry_msgs::PoseStamped> detect();
 
 
@@ -269,6 +275,9 @@ namespace line_extraction{
         ros::Time lastOkTime_;
         int expire_sec_;
         double detect_time_tol_;
+        double min_update_d_;
+        double min_update_a_;
+
 
 
         bool broadcast_tf_;
@@ -284,6 +293,8 @@ namespace line_extraction{
         geometry_msgs::PoseStamped triangle_in_base_;
 
         tf::StampedTransform stampedTransform_;
+        tf::Transform odomToBase_tf_;
+
 
         line_extraction::smoothPose smoothPose_;
 
@@ -296,6 +307,7 @@ namespace line_extraction{
         threading_util::Func_tfb<tf::StampedTransform> tfThread_;
     public:
         TargetPublish(ros::NodeHandle nh, ros::NodeHandle nh_private);
+        ~TargetPublish();
         void publish();
 
 

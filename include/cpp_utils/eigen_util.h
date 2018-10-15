@@ -38,6 +38,7 @@ namespace eigen_util{
     Eigen::Matrix3d getTransform2d(double x, double y, double yaw){
         //http://f1tenth.org/slides/l3-1.pdf
         Eigen::Matrix3d trans;
+        trans.setZero();
         Eigen::Vector3d t;
         t<< x, y, 1.0;
         trans.block(0,0,2,2) = getRotation2dFromYaw(yaw);
