@@ -237,6 +237,12 @@ bool line_extraction::LineSegmentDetector::getAngles(valarray<float> &angles) {
         nh_private_.param("min_update_a",min_update_a_,0.1);
 
 
+        nh_private_.param("x_conv",x_conv_, 0.05);
+        nh_private_.param("y_conv",y_conv_, 0.05);
+        nh_private_.param("yaw_conv",yaw_conv_, 0.05);
+
+
+
 
     };
 
@@ -346,6 +352,15 @@ bool line_extraction::LineSegmentDetector::getAngles(valarray<float> &angles) {
 
         targetPub_ = nh_.advertise<geometry_msgs::PoseStamped>("targetPose",1);
         pointsPub_ = nh_.advertise<geometry_msgs::PoseArray>("targetPoints",1);
+        initPosePub_ = nh_.advertise<geometry_msgs::PoseWithCovarianceStamped>("initialpose",1);
+
+        initPose_.header.frame_id = "map";
+        initPose_.pose.covariance[0] = x_conv_;
+        initPose_.pose.covariance[7] = y_conv_;
+        initPose_.pose.covariance[35] = yaw_conv_;
+
+
+
 
         baseToLaser_tf_.setIdentity();
         mapToOdom_tf_.setIdentity();
@@ -780,9 +795,7 @@ line_extraction::SimpleTriangleDetector::~SimpleTriangleDetector() {
 
                 for (int i = 0; i<= lines.size() - data_num ;i++){
 
-                    decltype(lines) line_select;
-
-                    line_select = decltype(lines)(&lines[i], &lines[i+data_num] );
+                    auto line_select = decltype(lines)(&lines[i], &lines[i+data_num] );
 
                     // check dist btween pair
                     double check_dist_diff = 0.0;
@@ -827,7 +840,12 @@ line_extraction::SimpleTriangleDetector::~SimpleTriangleDetector() {
                 // get best choice
                 auto best_i = container_util::argMin(diff_score_vec);
                 auto best_score = diff_score_vec[best_i];
-                ROS_ERROR("best_id %d", best_i);
+                ROS_ERROR("best_id %d, score %.3f", best_i,best_score);
+                if (best_score > max_marker_dist_diff_){
+                    ROS_ERROR("first_step failue");
+                    return targets;
+
+                }
 
 
 
@@ -1011,10 +1029,18 @@ line_extraction::SimpleTriangleDetector::~SimpleTriangleDetector() {
                 mapToOdom_tf_ = origin_pose_tf*pose_tf.inverse()*baseToLaser_tf_.inverse()*odomToBase_tf_.inverse();
 
                 tf::poseTFToMsg(mapToOdom_tf_, map_odom_pose_.pose);
-                // todo : bypass tf update
-#if 1
-                nh_private_.setParam("/amcl/tf_broadcast", false);
 
+                // reset amcl
+                initPose_.header.stamp = ros::Time::now();
+                tf::poseTFToMsg(mapToOdom_tf_*odomToBase_tf_,initPose_.pose.pose);
+
+                initPosePub_.publish(initPose_);
+
+                // todo : bypass tf update
+#if 0
+                nh_private_.setParam("/amcl/tf_broadcast", false);
+#endif
+#if 1
                 targets.push_back(map_odom_pose_);
 #endif
 
@@ -1141,7 +1167,8 @@ line_extraction::TargetPublish::~TargetPublish() {
         // how to change state
         if(!running_){
 
-            bool getmsg = listener_.getOneMessage(cmd_topic_,0.1);
+
+            bool getmsg = listener_.getOneMessage(cmd_topic_,0.05);
 
             if(getmsg){
                 if ( cmd_data_ptr_.get()->frame_id == "lighthouse_planner" || cmd_data_ptr_.get()->frame_id.empty() )
@@ -1176,7 +1203,7 @@ line_extraction::TargetPublish::~TargetPublish() {
 
         // skip
         tf::Transform odomToBase_tf;
-        bool gettf2 = listener_.getTransform("odom","base_link",odomToBase_tf,tn,0.01,
+        bool gettf2 = listener_.getTransform("odom","base_link",odomToBase_tf,tn,0.02,
                                              false);
         if (!gettf2){
             ROS_ERROR("get odom base tf fail! skip");
@@ -1194,6 +1221,18 @@ line_extraction::TargetPublish::~TargetPublish() {
             ROS_ERROR("little move!!");
             if (smoothPose_.num_ != 0){
                 ROS_ERROR("skip!!");
+                ros::Time tn = ros::Time::now();
+
+                auto dur = tn -lastOkTime_;
+//            ROS_ERROR("dur time : %f",dur.toSec());
+                if (dur.toSec() > detect_time_tol_){
+                    bool detected = false;
+                    nh_private_.param("/amcl/tf_broadcast",detected);
+                    if (detected){
+                        running_ = false;
+                    }
+
+                }
 
                 return ;
 

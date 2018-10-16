@@ -14,6 +14,7 @@
 #include <ros/console.h>
 #include <geometry_msgs/PoseArray.h>
 #include <geometry_msgs/PointStamped.h>
+#include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <std_msgs/String.h>
 #include <std_msgs/Header.h>
 
@@ -115,11 +116,17 @@ namespace line_extraction{
         // debug
         geometry_msgs::PoseStamped targetPose_;
         geometry_msgs::PoseArray targetPoints_;
+        geometry_msgs::PoseWithCovarianceStamped initPose_;
 
         XmlRpc::XmlRpcValue params_;
 
         ros::Publisher targetPub_;
         ros::Publisher pointsPub_;
+        ros::Publisher initPosePub_;
+
+        double x_conv_;
+        double y_conv_;
+        double yaw_conv_;
 
         // cache
 
