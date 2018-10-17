@@ -87,6 +87,9 @@
         <param name="max_marker_initial_dist" value="5.5" type="double"/>
         <param name="max_marker_dist_diff" value="0.05" type="double"/>
 
+        <param name="min_update_d" value="0.05" type="double"/>
+        <param name="min_update_a" value="0.05" type="double"/>
+
         <param name="x_conv" value="0.05" type="double"/>
         <param name="y_conv" value="0.05" type="double"/>
         <param name="yaw_conv" value="0.05" type="double"/>

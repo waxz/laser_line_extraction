@@ -1031,13 +1031,14 @@ line_extraction::SimpleTriangleDetector::~SimpleTriangleDetector() {
                 tf::poseTFToMsg(mapToOdom_tf_, map_odom_pose_.pose);
 
                 // reset amcl
+#if 0
                 initPose_.header.stamp = ros::Time::now();
                 tf::poseTFToMsg(mapToOdom_tf_*odomToBase_tf_,initPose_.pose.pose);
 
                 initPosePub_.publish(initPose_);
-
+#endif
                 // todo : bypass tf update
-#if 0
+#if 1
                 nh_private_.setParam("/amcl/tf_broadcast", false);
 #endif
 #if 1
