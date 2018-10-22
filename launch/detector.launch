@@ -73,7 +73,7 @@
         <param name="min_pairInterLength" value="0.15"/>
         <param name="max_pairInterLength" value="0.3"/>
 
-        <param name="max_fit_error" value="0.01"/>
+        <param name="max_fit_error" value="0.03"/>
 
 
         <param name="expire_sec" value="10"/>

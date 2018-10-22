@@ -734,7 +734,9 @@ line_extraction::SimpleTriangleDetector::~SimpleTriangleDetector() {
                 Eigen::MatrixXd measureData2;
 
                 Eigen::MatrixXd model(2,data_num);
-                Eigen::VectorXd x(data_num);
+                Eigen::VectorXd x(3);
+                // initial guess
+                x << 0.0, 0.0, 0.0;
 
                 // fill model data
                 for (int di = 0;di <data_num;di++){
@@ -787,6 +789,54 @@ line_extraction::SimpleTriangleDetector::~SimpleTriangleDetector() {
                 ROS_ERROR_STREAM("get laser in map  pose \n"<<trans_laser.matrix()<<"\n inverse \n"<< trans_laser.inverse().matrix());
 
                 ROS_ERROR_STREAM("get relative model pose \n"<<model);
+
+                // how many combinition
+                size_t dist_pair_num = 0;
+                for (size_t i = data_num - 1; i > 0; i--){
+                    dist_pair_num += i;
+                }
+
+                // match vector [0,0,0]
+                valarray<int> match_vec(0,dist_pair_num);
+
+                Eigen::VectorXd model_dist(dist_pair_num);
+
+                // model dist vec
+                int idx = 0;
+                for(int i = 0;i<data_num - 1;i++){
+                    for (int j = i+1;j<data_num;j++){
+                        double dist = (model.col(i) - model.col(j)).norm();
+                        model_dist(idx) = dist;
+                        idx ++;
+                    }
+                }
+
+                // get measure dist vec
+                int lines_size = lines.size();
+                for (int i = 0; i< lines_size - 1; i++){
+                    for(int j = i+1; j < lines_size; j++ ){
+
+                    }
+                }
+                // if fit any dist ,set that idx to 1
+
+                // decide to detect full data_num marker or not
+//                matchMarkers();
+
+
+
+                //detect all marker
+                // or track partial marker
+                bool full_detect = false;
+                if (full_detect){
+
+                }else{
+
+                    // find closest marker
+                    //
+
+                }
+
 
                 // check markers base  on distance
                 // new lines vector
@@ -854,9 +904,7 @@ line_extraction::SimpleTriangleDetector::~SimpleTriangleDetector() {
                 // fit two model
                 // model 1) : angle only model
                 // model 2) : 2d position model
-
-
-
+#if 0
                 // model 1
                 // fill measureData from laser
                 for (int di = 0;di <data_num;di++){
@@ -864,8 +912,30 @@ line_extraction::SimpleTriangleDetector::~SimpleTriangleDetector() {
                     measureData(0,di) =  valarray<float>(cache_angle_[std::slice(id1[di],id1.size(),1)]).sum()/id1.size();
                 }
 
+                ROS_ERROR_STREAM("model 1 measuredata \n"<<measureData);
+
+                opt_util::SimpleSolver<opt_util::AngleFunctor> sm;
+
+                sm.updataModel(model);
+
+                sm.setParams(x);
+                sm.feedData(measureData);
+
+                int status = sm.solve();
+                auto meanerror = sm.getMeanError();
+
+                ROS_ERROR_STREAM("get x \n"<<x<<std::endl << "error "<<meanerror);
+                x = sm.getParam();
+
+
+
+#endif
+
+
+
+
+
                 // model 2
-                int points_cnt = 0;
                 std::vector<double> mdata;
                 std::valarray<float > xs, ys;
                 lsd_.getXsYs(xs,ys);
@@ -887,37 +957,25 @@ line_extraction::SimpleTriangleDetector::~SimpleTriangleDetector() {
                 measureData2 = Eigen::Map<Eigen::MatrixXd>(mdata.data(), 4, mdata.size()/4);
 
 
-                ROS_ERROR_STREAM("model 1 measuredata \n"<<measureData);
                 ROS_ERROR_STREAM("model 2 measuredata \n"<<measureData2);
 
-                // initial guess
-                x << 0.0, 0.0, 0.0;
 
-                opt_util::SimpleSolver<opt_util::AngleFunctor> sm;
+
                 opt_util::SimpleSolver<opt_util::AngleRangeFunctor> sm2;
 
-                sm.updataModel(model);
                 sm2.updataModel(model);
 
-                sm.setParams(x);
                 sm2.setParams(x);
 
-                sm.feedData(measureData);
                 sm2.feedData(measureData2);
 
-                int status = sm.solve();
-#if 1
+
                 int ststus2 = sm2.solve();
-#endif
-                auto meanerror = sm.getMeanError();
+
                 auto meanerror2 = sm2.getMeanError();
 
-                x = sm.getParam();
                 auto x2 = sm2.getParam();
 
-                std::cout<<"get x \n"<<x<<std::endl << "error "<<meanerror << std::endl;
-                std::cout<<"get x2 \n"<<x2<<std::endl << "error "<<meanerror2 << std::endl;
-                ROS_ERROR_STREAM("get x \n"<<x<<std::endl << "error "<<meanerror);
                 ROS_ERROR_STREAM("get x2 \n"<<x2<<std::endl << "error "<<meanerror2);
 
                 auto t = timer.elapsedSeconds();
@@ -925,24 +983,17 @@ line_extraction::SimpleTriangleDetector::~SimpleTriangleDetector() {
                 // check error
                 //rule 1: mean error
                 // rule 2: relative angle
-                if (meanerror > max_fit_error_  ){
+                if (meanerror2 > max_fit_error_  ){
                     return targets;
                 }
 
                 // get transform position
-                eigen_util::TransformationMatrix2d trans(x(0), x(1), x(2));
                 eigen_util::TransformationMatrix2d trans2(x2(0), x2(1), x2(2));
 
-                std::cout << "get origin pose \n"<<origin_pos<<std::endl;
 
-                decltype(model) pos = trans*model;
-                std::cout << "get transform pose \n"<<pos<<std::endl;
-                decltype(model) pos2 = trans2*model;
-                std::cout << "get transform pose2 \n"<<pos2<<std::endl;
+                decltype(model) pos = trans2*model;
 
-#if 1
-                pos = pos2;
-#endif
+
 
                 geometry_msgs::PoseStamped origin_pose;
 
@@ -1206,8 +1257,18 @@ line_extraction::TargetPublish::~TargetPublish() {
         tf::Transform odomToBase_tf;
         bool gettf2 = listener_.getTransform("odom","base_link",odomToBase_tf,tn,0.02,
                                              false);
+        bool detected = false;
+        nh_private_.param("/amcl/tf_broadcast",detected);
+
         if (!gettf2){
             ROS_ERROR("get odom base tf fail! skip");
+            if ((tn -lastOkTime_).toSec() > detect_time_tol_){
+
+                if (detected){
+                    running_ = false;
+                }
+
+            }
             return;
         }
 
@@ -1216,31 +1277,29 @@ line_extraction::TargetPublish::~TargetPublish() {
         double move_a = fabs(tf::getYaw(base_move.getRotation()));
 
         ROS_ERROR_STREAM("base move d:"<<move_d<<"a :"<<move_a);
+        bool to_update_tf = true;
 
         if (move_d < min_update_d_ && move_a < min_update_a_){
 
             ROS_ERROR("little move!!");
             if (smoothPose_.num_ != 0){
                 ROS_ERROR("skip!!");
-                ros::Time tn = ros::Time::now();
 
-                auto dur = tn -lastOkTime_;
-//            ROS_ERROR("dur time : %f",dur.toSec());
-                if (dur.toSec() > detect_time_tol_){
-                    bool detected = false;
-                    nh_private_.param("/amcl/tf_broadcast",detected);
+                if ((tn -lastOkTime_).toSec() > detect_time_tol_){
                     if (detected){
                         running_ = false;
                     }
 
                 }
 
-                return ;
+                to_update_tf = false ;
 
             }
 
         }
-        odomToBase_tf_ = odomToBase_tf;
+        if (to_update_tf){
+            odomToBase_tf_ = odomToBase_tf;
+        }
 
         ROS_ERROR("start detect!!");
 
@@ -1322,7 +1381,9 @@ line_extraction::TargetPublish::~TargetPublish() {
                 stampedTransform_ = tf::StampedTransform(transform,
                                                          transform_expiration,
                                                          "map", "odom");
-                tfthreadClass_.syncArg(stampedTransform_);
+                if (to_update_tf){
+                    tfthreadClass_.syncArg(stampedTransform_);
+                }
 
             }
 
