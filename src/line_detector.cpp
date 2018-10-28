@@ -380,6 +380,106 @@ line_extraction::SimpleTriangleDetector::~SimpleTriangleDetector() {
 
 }
 
+void line_extraction::SimpleTriangleDetector::matchMarkers(const Eigen::MatrixXd &m1, const Eigen::MatrixXd &m2,
+                                                           std::vector<std::vector<int> > &ids_vec,
+                                                           std::vector<double> &score_vec, vector<int> ids, int m1_i,
+                                                           int m1_j, int m2_i, int m2_j) {
+
+
+    // first check start
+    if (m1_i == 0 && m1_j == 0) {
+
+        // params
+
+
+        // check if m1[0,1] m1[0,2] and m1[0,3]  in m2.row(0)
+        bool get = true;
+        for (int i = 1; i < m1.cols(); i++) {
+            double diff = (m2.row(m2_i).array() - m1(0, i)).abs().matrix().minCoeff();
+            if (diff > max_marker_dist_diff_) {
+                get = false;
+            }
+        }
+        //
+
+        if (get) {
+            ids.push_back(m2_i);
+            matchMarkers(m1, m2, ids_vec, score_vec, ids, 0, 1, m2_i, m2_j);
+
+
+        } else {
+            // check range
+            if (m2_i < m2.cols() - m1.cols()) {
+                // search next row
+                matchMarkers(m1, m2, ids_vec, score_vec, ids, 0, 0, m2_i + 1, m2_j + 1);
+            } else {
+                return;
+            }
+        }
+
+    } else {
+        // following check
+        bool get = fabs(m2(m2_i, m2_j) - m1(m1_i, m1_j)) < max_marker_dist_diff_;
+
+        if (get) {
+            ids.push_back(m2_j);
+            //check complete
+
+            if (ids.size() == m1.cols()) {
+
+                // check matrix norm
+
+                double score;
+
+                Eigen::MatrixXd tmp_m(m1.rows(), m1.cols());
+                tmp_m.setZero();
+                for (int i = 0; i < m1.rows(); i++) {
+                    for (int j = i + 1; j < m1.rows(); j++) {
+
+                        tmp_m(i, j) = m2(ids[i], ids[j]);
+                    }
+                }
+
+                score = (m1 - tmp_m).norm() / (0.5 * pow(static_cast<double >(m1.cols() - 1.0), 2));
+
+                // final complete
+                ids_vec.push_back(ids);
+
+                score_vec.push_back(score);
+
+
+            } else {
+                if (m2_j + 1 < m2.cols() && m1_j + 1 < m1.cols()) {
+                    matchMarkers(m1, m2, ids_vec, score_vec, ids, m1_i, m1_j + 1, m2_i, m2_j + 1);
+                }
+
+            }
+
+
+            // roll back
+            auto tmp_ids = ids;
+            for (int i = m1_j; i >= 0; i--) {
+                tmp_ids.pop_back();
+                if (m2_j + 1 < m2.cols()) {
+                    matchMarkers(m1, m2, ids_vec, score_vec, tmp_ids, m1_i, i, m2_i, m2_j + 1);
+
+                }
+
+            }
+
+
+        } else {
+
+            if (m2_j + 1 < m2.cols()) {
+                matchMarkers(m1, m2, ids_vec, score_vec, ids, m1_i, m1_j, m2_i, m2_j + 1);
+            }
+
+        }
+
+    }
+
+}
+
 vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::detect(){
     vector<geometry_msgs::PoseStamped> targets;
     // get lines
@@ -788,56 +888,40 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
             // check markers base  on distance
             // new lines vector
             //
-            std::vector<double > diff_score_vec;
-
-            for (int i = 0; i<= lines.size() - data_num ;i++){
-
-                auto line_select = decltype(lines)(&lines[i], &lines[i+data_num] );
-
-                // check dist btween pair
-                double check_dist_diff = 0.0;
-                for(int j = 0; j < data_num - 1; j++){
-                    for (int k= j+1 ;k < data_num; k++){
-                        auto l1 = line_select[j], l2 = line_select[k];
-
-                        type_util::Point2d p1(0.5*(l1.getStart()[0] + l1.getEnd()[0]),0.5*(l1.getStart()[1] + l1.getEnd()[1])),
-                                p2(0.5*(l2.getStart()[0] + l2.getEnd()[0]),0.5*(l2.getStart()[1] + l2.getEnd()[1])),
-                                m1(model(0,j),model(1,j)), m2(model(0,k),model(1,k));
-
-                        if (l1.length() > max_marker_length_ || l2.length() > max_marker_length_){
-                            check_dist_diff = 10.0;
-                            break;
-                        }
-
-                        double dist1 = geometry_util::PointToPointDistance(p1,p2);
-                        double dist2 = geometry_util::PointToPointDistance(m1,m2);
-
-                        double diff = fabs(dist1 - dist2);
-                        if(diff > check_dist_diff){
-                            check_dist_diff = diff;
-                        }
-                        if(check_dist_diff > max_marker_dist_diff_){
-                            break;
-                        }
-
-
-
-                    }
-                    if(check_dist_diff > max_marker_dist_diff_){
-                        break;
-                    }
-                }
-#if 0
-                ROS_ERROR("get id %d, score %.3f",i, check_dist_diff);
-#endif
-                diff_score_vec.push_back(check_dist_diff);
-
+            Eigen::MatrixXd detect_lines(2, lines.size());
+            for (int i = 0; i < lines.size(); i++) {
+                detect_lines(0, i) = 0.5 * (lines[i].getStart()[0] + lines[i].getEnd()[0]);
+                detect_lines(1, i) = 0.5 * (lines[i].getStart()[1] + lines[i].getEnd()[1]);
 
             }
 
+            Eigen::MatrixXd DistMatrix_detect = eigen_util::getDistMatrix(detect_lines);
+            Eigen::MatrixXd DistMatrix_model = eigen_util::getDistMatrix(model);
+
+            std::vector<std::vector<int>> id_vec;
+            std::vector<double> score_vec;
+            matchMarkers(DistMatrix_model, DistMatrix_detect, id_vec, score_vec);
+            std::cout << "=================\n id\n";
+            for (auto i:id_vec) {
+                for (auto j : i) {
+                    std::cout << j << ",";
+                }
+                std::cout << std::endl;
+            }
+            std::cout << "score\n";
+
+            for (auto i: score_vec) {
+                std::cout << i << ",";
+                std::cout << std::endl;
+
+            }
+            std::cout << "\n=================" << std::endl;
+
+
+
             // get best choice
-            auto best_i = container_util::argMin(diff_score_vec);
-            auto best_score = diff_score_vec[best_i];
+            auto best_i = container_util::argMin(score_vec);
+            auto best_score = score_vec[best_i];
 #if 0
             ROS_ERROR("best_id %d, score %.3f", best_i,best_score);
 #endif
@@ -849,7 +933,13 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
 
 
 
-            lines =  decltype(lines)(&lines[best_i], &lines[best_i+data_num] );
+
+            // final match line segments
+            decltype(lines) matchlines;
+            for (auto i : id_vec[best_i]) {
+                matchlines.push_back(lines[i]);
+            }
+
 
             // fit two model
             // model 1) : angle only model
@@ -858,7 +948,7 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
             // model 1
                 // fill measureData from laser
                 for (int di = 0;di <data_num;di++){
-                    auto id1 = lines[di].getIndices();
+                    auto id1 = matchlines[di].getIndices();
                     measureData(0,di) =  valarray<float>(cache_angle_[std::slice(id1[di],id1.size(),1)]).sum()/id1.size();
                 }
 
@@ -890,7 +980,7 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
             std::valarray<float > xs, ys;
             lsd_.getXsYs(xs,ys);
             for(int di = 0 ; di<data_num ;di ++){
-                auto id1 = lines[di].getIndices();
+                auto id1 = matchlines[di].getIndices();
 
                 for (int dj=0;dj < id1.size(); dj++){
 

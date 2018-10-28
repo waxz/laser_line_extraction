@@ -118,6 +118,22 @@ namespace eigen_util{
         }
 
     };
+
+    inline Eigen::MatrixXd getDistMatrix(const Eigen::MatrixXd &m) {
+
+        int sz = m.cols();
+        Eigen::MatrixXd M(sz, sz);
+        M.setZero();
+        for (int i = 0; i < sz; i++) {
+            for (int j = i + 1; j < sz; j++) {
+                M(i, j) = (m.col(i) - m.col(j)).norm();
+            }
+        }
+
+        return M;
+    }
 }
+
+
 
 #endif //LASER_LINE_EXTRACTION_EIGEN_UTIL_H

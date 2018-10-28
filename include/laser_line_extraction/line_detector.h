@@ -193,7 +193,10 @@ namespace line_extraction{
         SimpleTriangleDetector(ros::NodeHandle nh, ros::NodeHandle nh_private);
         ~SimpleTriangleDetector();
         vector<geometry_msgs::PoseStamped> detect();
-        void matchMarkers();
+
+        void matchMarkers(const Eigen::MatrixXd &m1, const Eigen::MatrixXd &m2, std::vector<std::vector<int> > &ids_vec,
+                          std::vector<double> &score_vec, std::vector<int> ids = std::vector<int>(), int m1_i = 0,
+                          int m1_j = 0, int m2_i = 0, int m2_j = 1);
 
 
 
