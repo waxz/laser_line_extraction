@@ -17,15 +17,26 @@ endif()
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -pedantic -pthread -g -O0 -fprofile-arcs -ftest-coverage")
 # Build warning with -pedantic https://github.com/ros/rosconsole/issues/9
 # example how to set c++ compiler flags for GNU
+message(STATUS CMAKE_BUILD_TYPE= ${CMAKE_BUILD_TYPE})
+if( NOT CMAKE_BUILD_TYPE )
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+
+if( CMAKE_BUILD_TYPE MATCHES Release )
+
+endif()
+if( CMAKE_BUILD_TYPE MATCHES Debug )
+    if(CMAKE_CXX_COMPILER_ID MATCHES GNU)
+
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-unknown-pragmas -Wno-sign-compare -Woverloaded-virtual -Wwrite-strings -Wno-unused")
+        set(CMAKE_CXX_FLAGS_DEBUG   "-O0 -g3")
+        set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -g -O0 -fprofile-arcs -ftest-coverage")
+    endif()
+endif()
 
 
-#if(CMAKE_CXX_COMPILER_ID MATCHES GNU)
-#
-#    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-unknown-pragmas -Wno-sign-compare -Woverloaded-virtual -Wwrite-strings -Wno-unused")
-#    set(CMAKE_CXX_FLAGS_DEBUG   "-O0 -g3")
-#    set(CMAKE_CXX_FLAGS_RELEASE "-O3")
-#    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -g -O0 -fprofile-arcs -ftest-coverage")
-#endif()
+
 
 find_package(catkin REQUIRED COMPONENTS
   cmake_modules
