@@ -178,6 +178,7 @@ namespace line_extraction{
         tf::Transform odomToBase_tf_;
         tf::Transform mapToOdom_tf_;
         geometry_msgs::PoseStamped map_odom_pose_;
+        bool broadcast_map_odom_tf_;
 
 
 
@@ -278,6 +279,10 @@ namespace line_extraction{
         std::shared_ptr<std_msgs::Header> cmd_data_ptr_;
 
         bool running_;
+        XmlRpc::XmlRpcValue params_;
+        tf::Transform target_in_marker_tf_;
+
+
 
 
         ros::Time lastOkTime_;

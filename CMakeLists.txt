@@ -12,18 +12,20 @@ if(NOT CMAKE_VERSION VERSION_LESS 3.1)
     #    set(CMAKE_C_STANDARD 99)
 else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99")
+#    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99")
 endif()
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall  -pthread -g -O0 -fprofile-arcs -ftest-coverage")
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -pedantic -pthread -g -O0 -fprofile-arcs -ftest-coverage")
 # Build warning with -pedantic https://github.com/ros/rosconsole/issues/9
 # example how to set c++ compiler flags for GNU
-if(CMAKE_CXX_COMPILER_ID MATCHES GNU)
-    set(CMAKE_CXX_FLAGS         "${CMAKE_CXX_FLAGS} -Wall -Wno-unknown-pragmas -Wno-sign-compare -Woverloaded-virtual -Wwrite-strings -Wno-unused")
-    set(CMAKE_CXX_FLAGS_DEBUG   "-O0 -g3")
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-arcs -ftest-coverage")
-endif()
+
+
+#if(CMAKE_CXX_COMPILER_ID MATCHES GNU)
+#
+#    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-unknown-pragmas -Wno-sign-compare -Woverloaded-virtual -Wwrite-strings -Wno-unused")
+#    set(CMAKE_CXX_FLAGS_DEBUG   "-O0 -g3")
+#    set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+#    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -g -O0 -fprofile-arcs -ftest-coverage")
+#endif()
 
 find_package(catkin REQUIRED COMPONENTS
   cmake_modules
@@ -81,11 +83,11 @@ target_link_libraries(line_detector_node line_detector_lib)
 #add_executable(shelf_detector_node src/shelf_detector_node.cpp)
 #target_link_libraries(shelf_detector_node line_detector_lib)
 
-add_executable(line_detector_ekf_node src/ekf.cpp)
-target_link_libraries(line_detector_ekf_node ${catkin_LIBRARIES})
+#add_executable(line_detector_ekf_node src/ekf.cpp)
+#target_link_libraries(line_detector_ekf_node ${catkin_LIBRARIES})
 
-add_executable(triangle_sim_node src/triangle_sim.cpp)
-target_link_libraries(triangle_sim_node ${catkin_LIBRARIES})
+#add_executable(triangle_sim_node src/triangle_sim.cpp)
+#target_link_libraries(triangle_sim_node ${catkin_LIBRARIES})
 
 #add_executable(marker_detector src/marker_detector.cpp)
 #target_link_libraries(marker_detector line_detector_lib)
@@ -93,8 +95,8 @@ target_link_libraries(triangle_sim_node ${catkin_LIBRARIES})
 # catkin_add_gtest(${PROJECT_NAME}-test test/test_laser_line_extraction.cpp)
 install(TARGETS line_detector_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 #install(TARGETS shelf_detector_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
-install(TARGETS line_detector_ekf_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
-install(TARGETS triangle_sim_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+#install(TARGETS line_detector_ekf_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+#install(TARGETS triangle_sim_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
 install(TARGETS line_extraction_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 install(TARGETS line_extraction_ros line_extraction line line_detector_lib ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION} LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION} RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION})

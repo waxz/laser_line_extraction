@@ -79,16 +79,17 @@
         <param name="expire_sec" value="10"/>
 
         <param name="broadcast_tf" value="false"/>
-        <param name="pub_pose" value="true"/>
+        <param name="pub_pose" value="false"/>
         <param name="triangle_direction" value="-1"/>
 
-        <param name="broadcast_map_odom_tf" value="true" type="bool"/>
+        <param name="pub_lighthouse" value="true" type="bool"/>
+        <param name="broadcast_map_odom_tf" value="false" type="bool"/>
         <param name="max_marker_length" value="0.09" type="double"/>
         <param name="max_marker_initial_dist" value="5.5" type="double"/>
-        <param name="max_marker_dist_diff" value="0.05" type="double"/>
+        <param name="max_marker_dist_diff" value="0.08" type="double"/>
 
-        <param name="min_update_d" value="0.02" type="double"/>
-        <param name="min_update_a" value="0.02" type="double"/>
+        <param name="min_update_d" value="-0.02" type="double"/>
+        <param name="min_update_a" value="-0.02" type="double"/>
 
         <param name="x_conv" value="0.05" type="double"/>
         <param name="y_conv" value="0.05" type="double"/>
@@ -96,16 +97,20 @@
 
         <rosparam>
             points_array :
-              - x : -4.65
-                y : -0.115
-              - x : -4.3
-                y : -0.115
-              - x : -3.95
-                y : -0.115
+              - x : 1.0
+                y : -0.2
+              - x : 1.0
+                y : -0.0
+              - x : 1.0
+                y : 0.2
 
         </rosparam>
 
     </node>
+
+    <node name="tf1" pkg="tf" type="static_transform_publisher" args="0 0 0 0 0 0 1 odom base_link 20" />
+    <node name="tf2" pkg="tf" type="static_transform_publisher" args="0.1 0 0 0 0 0 1 base_link base_laser 20" />
+    <node name="tf3" pkg="tf" type="static_transform_publisher" args="0 0 0 0 0 0 1 map odom 20" />
 
 
 

@@ -141,7 +141,6 @@ void line_extraction::LineSegmentDetector::getLines( std::vector<line_extraction
     timer.stop();
     std::cout<<std::endl;
 
-    printf("pub_markers_ time %.6f\n",timer.elapsedSeconds());
     std::cout<<std::endl;
 
 
@@ -149,7 +148,6 @@ void line_extraction::LineSegmentDetector::getLines( std::vector<line_extraction
 
 void line_extraction::LineSegmentDetector::pubMarkers(std::vector<line_extraction::Line> lines){
     // Populate message
-    ROS_INFO("publish markers!!");
     laser_line_extraction::LineSegmentList msg;
     this->populateLineSegListMsg(lines, msg);
     this->line_publisher_.publish(msg);
@@ -235,6 +233,9 @@ void line_extraction::SimpleTriangleDetector::initParams(){
     nh_private_.param("max_marker_dist_diff",max_marker_dist_diff_,0.05);
     nh_private_.param("min_update_d",min_update_d_,0.1);
     nh_private_.param("min_update_a",min_update_a_,0.1);
+
+    // return marker_in_base or map_odom_tf
+    nh_private_.param("broadcast_map_odom_tf", broadcast_map_odom_tf_, false);
 
 
     nh_private_.param("x_conv",x_conv_, 0.05);
@@ -678,12 +679,8 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
 
 #if 1
         timer.stop();
-        std::cout<<std::endl;
 
-        printf("lsd_.getLines time %.6f\n",timer.elapsedSeconds());
-        std::cout<<std::endl;
 #endif
-        std::cout<<"get lines "<< lines.size()<< std::endl;
 
 #if 0
         // todo :bypass debug line_detector
@@ -750,7 +747,6 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
 #if 1
             // get base im map tf
             // transform model point to vase frame;
-            std::cout<<"looking up tf "<< std::endl;
 
             // look up base to laser frame for once
             if(baseToLaser_tf_.getOrigin().x() == 0.0){
@@ -768,11 +764,12 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
                                                  false);
 
             if ( ! gettf1 || ! gettf2 ){
+                ROS_ERROR("look up tf error !! skip");
                 return targets;
             }
-
-            std::cout<<"get up tf  ok"<< std::endl;
-
+#if 0
+            ROS_ERROR("look up tf time %.4f", timer.elapsedSeconds());
+#endif
 #endif
             //get map to laser tf
             tf::Transform mapToLaser_tf = mapToOdom_tf_*odomToBase_tf_*baseToLaser_tf_;
@@ -781,14 +778,12 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
 
             // tranform model data to relative position
             decltype(model) origin_pos = model;
-            ROS_ERROR_STREAM("get  model pose \n"<<model);
 
 
             eigen_util::TransformationMatrix2d trans_laser(mapToLaser_tf.getOrigin().x(), mapToLaser_tf.getOrigin().y(), tf::getYaw(mapToLaser_tf.getRotation()));
             model = trans_laser.inverse()*model;
-            ROS_ERROR_STREAM("get laser in map  pose \n"<<trans_laser.matrix()<<"\n inverse \n"<< trans_laser.inverse().matrix());
+            ROS_ERROR_STREAM("get  model pose \n"<<model<<"\n get relative model pose \n"<<model << "\n get laser in map  pose \n"<<trans_laser.matrix()<<"\n inverse \n"<< trans_laser.inverse().matrix());
 
-            ROS_ERROR_STREAM("get relative model pose \n"<<model);
 
             // check markers base  on distance
             // new lines vector
@@ -832,8 +827,9 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
                         break;
                     }
                 }
-
+#if 0
                 ROS_ERROR("get id %d, score %.3f",i, check_dist_diff);
+#endif
                 diff_score_vec.push_back(check_dist_diff);
 
 
@@ -842,7 +838,9 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
             // get best choice
             auto best_i = container_util::argMin(diff_score_vec);
             auto best_score = diff_score_vec[best_i];
+#if 0
             ROS_ERROR("best_id %d, score %.3f", best_i,best_score);
+#endif
             if (best_score > max_marker_dist_diff_){
                 ROS_ERROR("first_step failue");
                 return targets;
@@ -908,9 +906,9 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
             }
             measureData2 = Eigen::Map<Eigen::MatrixXd>(mdata.data(), 4, mdata.size()/4);
 
-
+#if 0
             ROS_ERROR_STREAM("model 2 measuredata \n"<<measureData2);
-
+#endif
 
 
             opt_util::SimpleSolver<opt_util::AngleRangeFunctor> sm2;
@@ -921,17 +919,19 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
 
             sm2.feedData(measureData2);
 
+            timer.stop();
+            timer.start();
 
             int ststus2 = sm2.solve();
 
             auto meanerror2 = sm2.getMeanError();
 
             auto x2 = sm2.getParam();
-
+#if 0
             ROS_ERROR_STREAM("get x2 \n"<<x2<<std::endl << "error "<<meanerror2);
-
+#endif
             auto t = timer.elapsedSeconds();
-            ROS_INFO("fit time %.4f",t);
+            ROS_ERROR("levmarq fit time %.4f",t);
             // check error
             //rule 1: mean error
             // rule 2: relative angle
@@ -951,6 +951,7 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
 
             geometry_msgs::PoseStamped pose;
             pose.pose.position.z = baseToLaser_tf_.getOrigin().z();
+            double laser_direction = tf::getYaw(baseToLaser_tf_.getRotation());
             origin_pose.pose.position.z = baseToLaser_tf_.getOrigin().z();
 
             double  yaw;
@@ -968,7 +969,15 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
                 pose.pose.position.x = m(0);
                 pose.pose.position.y = m(1);
 
-                yaw = atan2(pos(1,1) - pos(1,0), pos(0,1) - pos(0,0)) - 0.5*M_PI;
+#if 0
+                yaw = atan2(pos(1,1) - pos(1,0), pos(0,1) - pos(0,0)) + (laser_direction < 0.01)? (-0.5*M_PI) :(0.5*M_PI) ;
+
+//                yaw = atan2(sin(yaw),cos(yaw));
+                ROS_ERROR("get yaw [%.4f] + [%.4f] = %.4f",atan2(pos(1,1) - pos(1,0), pos(0,1) - pos(0,0)), (laser_direction < 0.01)? (-0.5*M_PI) :(0.5*M_PI),yaw );
+
+#endif
+                yaw = double(atan2(pos(1,1) - pos(1,0), pos(0,1) - pos(0,0))) + double(0.5*M_PI);
+
                 tf::quaternionTFToMsg(tf_util::createQuaternionFromYaw(yaw),pose.pose.orientation);
 
                 // origin pose
@@ -976,7 +985,11 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
                 origin_pose.pose.position.x = m(0);
                 origin_pose.pose.position.y = m(1);
 
-                yaw = atan2(origin_pos(1,1) - origin_pos(1,0), origin_pos(0,1) - origin_pos(0,0)) - 0.5*M_PI;
+#if 0
+                yaw = atan2(origin_pos(1,1) - origin_pos(1,0), origin_pos(0,1) - origin_pos(0,0)) + (laser_direction < 0.01)? (-0.5*M_PI) :(0.5*M_PI) ;
+
+#endif
+                yaw = double(atan2(origin_pos(1,1) - origin_pos(1,0), origin_pos(0,1) - origin_pos(0,0))) + double(0.5*M_PI);
                 tf::quaternionTFToMsg(tf_util::createQuaternionFromYaw(yaw),origin_pose.pose.orientation);
 
 
@@ -1006,12 +1019,10 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
 
 
 
-            pose.header = latestScan_.header;
-            pose.header.stamp = tn;
 
 
 
-            targetPub_.publish(pose);
+
 
 
             // how to use result
@@ -1029,7 +1040,16 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
             tf::Transform origin_pose_tf, pose_tf;
             tf::poseMsgToTF(origin_pose.pose,origin_pose_tf);
             tf::poseMsgToTF(pose.pose,pose_tf);
+
+            // map odom tf
             mapToOdom_tf_ = origin_pose_tf*pose_tf.inverse()*baseToLaser_tf_.inverse()*odomToBase_tf_.inverse();
+
+            // marker pose in base
+            tf::poseTFToMsg(baseToLaser_tf_*pose_tf,pose.pose);
+
+            pose.header.frame_id = base_frame_id_;
+            pose.header.stamp = tn;
+            targetPub_.publish(pose);
 
             tf::poseTFToMsg(mapToOdom_tf_, map_odom_pose_.pose);
 
@@ -1040,13 +1060,16 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
 
                 initPosePub_.publish(initPose_);
 #endif
-            // todo : bypass tf update
-#if 1
-            nh_private_.setParam("/amcl/tf_broadcast", false);
-#endif
-#if 1
-            targets.push_back(map_odom_pose_);
-#endif
+
+            if(broadcast_map_odom_tf_){
+                nh_private_.setParam("/amcl/tf_broadcast", false);
+                targets.push_back(map_odom_pose_);
+
+            }else{
+                targets.push_back(pose);
+
+            }
+
 
 
 
@@ -1199,6 +1222,12 @@ void line_extraction::TargetPublish::publish(){
             }
             return;
         }
+
+        nh_private_.getParam("target_pose",params_);
+        target_in_marker_tf_.setOrigin(tf::Vector3(params_["x"],params_["y"],0.0));
+        target_in_marker_tf_.setRotation(tf::createQuaternionFromYaw(params_["yaw"]));
+
+
     }
 
     std::cout<<"start detect "<<std::endl;
@@ -1217,9 +1246,9 @@ void line_extraction::TargetPublish::publish(){
     auto base_move = odomToBase_tf_.inverse()*odomToBase_tf;
     double move_d = sqrt(pow(base_move.getOrigin().x(),2) + pow(base_move.getOrigin().y(),2) );
     double move_a = fabs(tf::getYaw(base_move.getRotation()));
-
+#if 0
     ROS_ERROR_STREAM("base move d:"<<move_d<<"a :"<<move_a);
-
+#endif
     if (move_d < min_update_d_ && move_a < min_update_a_){
 
         ROS_ERROR("little move!!");
@@ -1245,7 +1274,7 @@ void line_extraction::TargetPublish::publish(){
     }
     odomToBase_tf_ = odomToBase_tf;
 
-    ROS_ERROR("start detect!!");
+//    ROS_ERROR("start detect!!");
 
 
     auto targets = sd_.detect();
@@ -1265,19 +1294,18 @@ void line_extraction::TargetPublish::publish(){
 
         }
 #endif
-        ROS_ERROR("start pub!!");
 
         //
-        tf::Transform transform;
-        tf::poseMsgToTF(pose.pose,transform);
+        tf::Transform marker_tf;
+        tf::poseMsgToTF(pose.pose,marker_tf);
 
 #if 0
         smoothPose_.getMean();
 
-            transform.setOrigin(tf::Vector3(smoothPose_.mean_x_,smoothPose_.mean_y_,0.0));
+            marker_tf.setOrigin(tf::Vector3(smoothPose_.mean_x_,smoothPose_.mean_y_,0.0));
 
 
-            transform.setRotation(tf::createQuaternionFromYaw(smoothPose_.mean_yaw_));
+            marker_tf.setRotation(tf::createQuaternionFromYaw(smoothPose_.mean_yaw_));
 #endif
 
         if ( broadcast_tf_){
@@ -1293,7 +1321,7 @@ void line_extraction::TargetPublish::publish(){
             ros::Duration transform_tolerance;
             transform_tolerance.fromSec(0.1);
             ros::Time transform_expiration = (tn + transform_tolerance);
-            stampedTransform_ = tf::StampedTransform(baseToLaser_tf_*transform,
+            stampedTransform_ = tf::StampedTransform(baseToLaser_tf_*marker_tf,
                                                      transform_expiration,
                                                      base_frame_id_, target_framde_id_);
             tfthreadClass_.syncArg(stampedTransform_);
@@ -1303,7 +1331,7 @@ void line_extraction::TargetPublish::publish(){
             // publish base in triangle
             base_in_triangle_.header.stamp = tn;
             base_in_triangle_.header.frame_id = target_framde_id_;
-            tf::poseTFToMsg((baseToLaser_tf_*transform).inverse(),base_in_triangle_.pose);
+            tf::poseTFToMsg((baseToLaser_tf_*marker_tf).inverse(),base_in_triangle_.pose);
             pubthreadClass_.syncArg(base_in_triangle_);
         }
 
@@ -1312,17 +1340,18 @@ void line_extraction::TargetPublish::publish(){
         lastOkTime_ = tn;
 
         // publish triangle in base
+        // or target pose in base
         if (pub_lighthouse_){
             triangle_in_base_.header.stamp = tn;
             triangle_in_base_.header.frame_id = base_frame_id_;
-            tf::poseTFToMsg(baseToLaser_tf_*transform,triangle_in_base_.pose);
+            tf::poseTFToMsg(baseToLaser_tf_*marker_tf*target_in_marker_tf_,triangle_in_base_.pose);
             lighthouse_pose_pub_.publish(triangle_in_base_);
         }
         if(broadcast_map_odom_tf_){
             ros::Duration transform_tolerance;
             transform_tolerance.fromSec(0.1);
             ros::Time transform_expiration = (tn + transform_tolerance);
-            stampedTransform_ = tf::StampedTransform(transform,
+            stampedTransform_ = tf::StampedTransform(marker_tf,
                                                      transform_expiration,
                                                      "map", "odom");
             tfthreadClass_.syncArg(stampedTransform_);

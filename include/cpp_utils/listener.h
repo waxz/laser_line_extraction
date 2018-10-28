@@ -346,7 +346,7 @@ namespace rosnode {
 
     inline bool Listener::getTransform(string fix_frame, string target_frame, tf::Transform &transform, ros::Time time,
                                        double sleep_duration, bool block) {
-        ROS_INFO("Listener lookup %s to %s ", fix_frame.c_str(), target_frame.c_str());
+//        ROS_INFO("Listener lookup %s to %s ", fix_frame.c_str(), target_frame.c_str());
 
         bool successful = tf_util::lookupTransform(tf_, fix_frame, target_frame, transform, time, sleep_duration,
                                                    block);
