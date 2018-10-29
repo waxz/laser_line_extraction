@@ -370,6 +370,9 @@ line_extraction::SimpleTriangleDetector::SimpleTriangleDetector(ros::NodeHandle 
     map_frame_id_ = "map";
     odom_frame_id_ = "odom";
     base_frame_id_ = "base_link";
+    matchLines_.clear();
+
+    track_marker_ = false;
 
 
 
@@ -382,7 +385,8 @@ line_extraction::SimpleTriangleDetector::~SimpleTriangleDetector() {
 
 void line_extraction::SimpleTriangleDetector::matchMarkers(const Eigen::MatrixXd &m1, const Eigen::MatrixXd &m2,
                                                            std::vector<std::vector<int> > &ids_vec,
-                                                           std::vector<double> &score_vec, vector<int> ids, int m1_i,
+                                                           std::vector<double> &score_vec, std::vector<int> ids,
+                                                           int m1_i,
                                                            int m1_j, int m2_i, int m2_j) {
 
 
@@ -478,6 +482,89 @@ void line_extraction::SimpleTriangleDetector::matchMarkers(const Eigen::MatrixXd
 
     }
 
+}
+
+// track marker
+void line_extraction::SimpleTriangleDetector::trackMarkers(const Eigen::MatrixXd &m1, const Eigen::MatrixXd &m2,
+                                                           std::vector<std::vector<int> > &ids_vec,
+                                                           std::vector<double> &score_vec, std::vector<int> ids,
+                                                           int m1_i, int m2_i) {
+
+    // model m1
+    // data m2
+
+    // search
+    bool get;
+    double min_diff = (m2.colwise() - m1.col(m1_i)).colwise().norm().minCoeff();
+    get = min_diff < max_marker_dist_diff_;
+    if (get) {
+        bool get2 = (m2.col(m2_i) - m1.col(m1_i)).norm() < max_marker_dist_diff_;
+
+
+        if (get2) {
+
+            ids.push_back(m2_i);
+            if (ids.size() == m1.cols()) {
+                double score;
+
+                Eigen::MatrixXd tmp_m = m1;
+                int valid_cnt = 0;
+                for (int i = 0; i < ids.size(); i++) {
+                    if (ids[i] > 0) {
+                        valid_cnt++;
+                        tmp_m.col(i) = m2.col(ids[i]);
+                    }
+                }
+
+                score = (m1 - tmp_m).norm() / valid_cnt;
+
+                ids_vec.push_back(ids);
+                score_vec.push_back(score);
+
+            } else {
+                if (m2_i + 1 < m2.cols() && m1_i + 1 < m1.cols()) {
+                    trackMarkers(m1, m2, ids_vec, score_vec, ids, m1_i + 1, m2_i + 1);
+                }
+
+            }
+
+            // roll back
+            auto tmp_vec = ids;
+
+            if (m2_i + 1 < m2.cols() && m1_i < m1.cols()) {
+                tmp_vec.pop_back();
+
+                trackMarkers(m1, m2, ids_vec, score_vec, tmp_vec, m1_i, m2_i + 1);
+            }
+//            auto tmp_vec = ids;
+//            for (int i = m1_i; i >= 0; i--) {
+//                if (m2_i +1 < m2.cols() && m1_i + 1 < m1.cols()) {
+//
+//                    tmp_vec.pop_back();
+//                    trackMarkers(m1, m2, ids_vec, score_vec, tmp_vec, i, m2_i + 1);
+//
+//                }
+//
+//            }
+
+        } else {
+            if (m2_i + 1 < m2.cols() && m1_i < m1.cols()) {
+                trackMarkers(m1, m2, ids_vec, score_vec, ids, m1_i, m2_i + 1);
+            }
+        }
+    } else {
+
+        // fail
+        // push -1
+        // find next
+        if (m2_i < m2.cols() && m1_i + 1 < m1.cols()) {
+            ids.push_back(-1);
+            trackMarkers(m1, m2, ids_vec, score_vec, ids, m1_i + 1, m2_i);
+        } else {
+            return;
+        }
+
+    }
 }
 
 vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::detect(){
@@ -931,6 +1018,10 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
 
             }
 
+            // try each result
+            // compute fit error
+            // choose best fit result
+
 
 
 
@@ -939,6 +1030,7 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
             for (auto i : id_vec[best_i]) {
                 matchlines.push_back(lines[i]);
             }
+            matchLines_ = matchlines;
 
 
             // fit two model
@@ -1033,6 +1125,7 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
             eigen_util::TransformationMatrix2d trans2(x2(0), x2(1), x2(2));
 
 
+            // get observed model
             decltype(model) pos = trans2*model;
 
 

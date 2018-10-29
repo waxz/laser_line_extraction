@@ -111,6 +111,8 @@ namespace line_extraction{
         ros::NodeHandle nh_private_;
         rosnode::Listener listener_;
         line_extraction::LineSegmentDetector lsd_;
+        std::vector<line_extraction::Line> matchLines_;
+
 
 
         // debug
@@ -133,6 +135,8 @@ namespace line_extraction{
         valarray<float> cache_cos_;
         valarray<float> cache_sin_;
         valarray<float> cache_angle_;
+
+        bool track_marker_;
 
         // param
         double min_segLength_;
@@ -198,7 +202,9 @@ namespace line_extraction{
                           std::vector<double> &score_vec, std::vector<int> ids = std::vector<int>(), int m1_i = 0,
                           int m1_j = 0, int m2_i = 0, int m2_j = 1);
 
-
+        void trackMarkers(const Eigen::MatrixXd &m1, const Eigen::MatrixXd &m2, std::vector<std::vector<int> > &ids_vec,
+                          std::vector<double> &score_vec, std::vector<int> ids = std::vector<int>(),
+                          int m1_i = 0, int m2_i = 0);
 
     };
 
