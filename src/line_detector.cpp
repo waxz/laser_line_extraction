@@ -1066,7 +1066,9 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
                 ROS_ERROR("get yaw [%.4f] + [%.4f] = %.4f",atan2(pos(1,1) - pos(1,0), pos(0,1) - pos(0,0)), (laser_direction < 0.01)? (-0.5*M_PI) :(0.5*M_PI),yaw );
 
 #endif
-                yaw = double(atan2(pos(1,1) - pos(1,0), pos(0,1) - pos(0,0))) + double(0.5*M_PI);
+                yaw = double(atan2(pos(1, 1) - pos(1, 0), pos(0, 1) - pos(0, 0))) +
+                      double((laser_direction < 0.01) ? (-0.5 * M_PI) : (0.5 * M_PI));
+                // ROS_ERROR("get yaw [%.4f] + [%.4f] = %.4f",atan2(pos(1,1) - pos(1,0), pos(0,1) - pos(0,0)), (laser_direction < 0.01)? (-0.5*M_PI) :(0.5*M_PI),yaw );
 
                 tf::quaternionTFToMsg(tf_util::createQuaternionFromYaw(yaw),pose.pose.orientation);
 
@@ -1079,7 +1081,8 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
                 yaw = atan2(origin_pos(1,1) - origin_pos(1,0), origin_pos(0,1) - origin_pos(0,0)) + (laser_direction < 0.01)? (-0.5*M_PI) :(0.5*M_PI) ;
 
 #endif
-                yaw = double(atan2(origin_pos(1,1) - origin_pos(1,0), origin_pos(0,1) - origin_pos(0,0))) + double(0.5*M_PI);
+                yaw = double(atan2(origin_pos(1, 1) - origin_pos(1, 0), origin_pos(0, 1) - origin_pos(0, 0))) +
+                      double((laser_direction < 0.01) ? (-0.5 * M_PI) : (0.5 * M_PI));
                 tf::quaternionTFToMsg(tf_util::createQuaternionFromYaw(yaw),origin_pose.pose.orientation);
 
 
@@ -1232,7 +1235,7 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
 
     base_frame_id_ = "base_link";
     laser_frame_id_ = "base_laser";
-    target_framde_id_ = "base_triangle";
+    target_frame_id_ = "base_marker";
 
     fake_pose_topic_ = "triangle_pose";
 
@@ -1385,7 +1388,9 @@ void line_extraction::TargetPublish::publish(){
         }
 #endif
 
-        //
+        // marker_tf
+        // marker in base frame
+        // or map odom tf
         tf::Transform marker_tf;
         tf::poseMsgToTF(pose.pose,marker_tf);
 
@@ -1399,29 +1404,23 @@ void line_extraction::TargetPublish::publish(){
 #endif
 
         if ( broadcast_tf_){
+            // publish baselink marker tf
 
-            if(baseToLaser_tf_.getOrigin().x() == 0.0){
-                bool gettf = listener_.getTransform(base_frame_id_,laser_frame_id_,baseToLaser_tf_,ros::Time::now(),0.1,
-                                                    false);
-                if(!gettf){
-                    return;
-                }
-            }
 
             ros::Duration transform_tolerance;
             transform_tolerance.fromSec(0.1);
             ros::Time transform_expiration = (tn + transform_tolerance);
-            stampedTransform_ = tf::StampedTransform(baseToLaser_tf_*marker_tf,
+            stampedTransform_ = tf::StampedTransform(marker_tf * target_in_marker_tf_,
                                                      transform_expiration,
-                                                     base_frame_id_, target_framde_id_);
+                                                     base_frame_id_, target_frame_id_);
             tfthreadClass_.syncArg(stampedTransform_);
         }
 
         if (pub_pose_){
             // publish base in triangle
             base_in_triangle_.header.stamp = tn;
-            base_in_triangle_.header.frame_id = target_framde_id_;
-            tf::poseTFToMsg((baseToLaser_tf_*marker_tf).inverse(),base_in_triangle_.pose);
+            base_in_triangle_.header.frame_id = target_frame_id_;
+            tf::poseTFToMsg((marker_tf * target_in_marker_tf_).inverse(), base_in_triangle_.pose);
             pubthreadClass_.syncArg(base_in_triangle_);
         }
 
@@ -1434,7 +1433,7 @@ void line_extraction::TargetPublish::publish(){
         if (pub_lighthouse_){
             triangle_in_base_.header.stamp = tn;
             triangle_in_base_.header.frame_id = base_frame_id_;
-            tf::poseTFToMsg(baseToLaser_tf_*marker_tf*target_in_marker_tf_,triangle_in_base_.pose);
+            tf::poseTFToMsg(marker_tf * target_in_marker_tf_, triangle_in_base_.pose);
             lighthouse_pose_pub_.publish(triangle_in_base_);
         }
         if(broadcast_map_odom_tf_){
@@ -1499,7 +1498,7 @@ void line_extraction::TargetPublish::publish(){
                 ros::Time transform_expiration = (tn + transform_tolerance);
                 stampedTransform_ = tf::StampedTransform(tranform_change.inverse()*stampedTransform_,
                                                          transform_expiration,
-                                                         base_frame_id_, target_framde_id_);
+                                                         base_frame_id_, target_frame_id_);
                 tfthreadClass_.syncArg(stampedTransform_);
             }
 

@@ -78,7 +78,7 @@
 
         <param name="expire_sec" value="10"/>
 
-        <param name="broadcast_tf" value="false"/>
+        <param name="broadcast_tf" value="true"/>
         <param name="pub_pose" value="false"/>
         <param name="triangle_direction" value="-1"/>
 
@@ -88,8 +88,8 @@
         <param name="max_marker_initial_dist" value="5.5" type="double"/>
         <param name="max_marker_dist_diff" value="0.08" type="double"/>
 
-        <param name="min_update_d" value="-0.02" type="double"/>
-        <param name="min_update_a" value="-0.02" type="double"/>
+        <param name="min_update_d" value="0.02" type="double"/>
+        <param name="min_update_a" value="0.02" type="double"/>
 
         <param name="x_conv" value="0.05" type="double"/>
         <param name="y_conv" value="0.05" type="double"/>
@@ -103,6 +103,10 @@
                 y : -0.0
               - x : 1.0
                 y : 0.2
+            target_pose :
+            x : 0.0
+            y : 0.0
+            yaw : 0.0
 
         </rosparam>
 

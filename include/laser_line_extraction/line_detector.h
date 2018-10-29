@@ -272,7 +272,7 @@ namespace line_extraction{
         string base_frame_id_;
 
         string laser_frame_id_;
-        string target_framde_id_;
+        string target_frame_id_;
 
 
         string fake_pose_topic_;
