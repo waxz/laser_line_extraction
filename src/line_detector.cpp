@@ -515,11 +515,28 @@ void line_extraction::SimpleTriangleDetector::trackMarkers(const Eigen::MatrixXd
                         tmp_m.col(i) = m2.col(ids[i]);
                     }
                 }
+                if (valid_cnt > 2) {
+                    Eigen::MatrixXd model_matrix(2, valid_cnt), detect_matrix(2, valid_cnt);
+                    for (int i = 0; i < ids.size(); i++) {
+                        if (ids[i] > 0) {
+//                            model_matrix.col(i) =
 
-                score = (m1 - tmp_m).norm() / valid_cnt;
+                        }
+                    }
 
-                ids_vec.push_back(ids);
-                score_vec.push_back(score);
+                    // get dist matrix of match points
+                    // get matrix norm
+                    Eigen::MatrixXd DistMatrix_detect = eigen_util::getDistMatrix(m2);
+                    Eigen::MatrixXd DistMatrix_model = eigen_util::getDistMatrix(m1);
+
+
+                    score = (m1 - tmp_m).norm() / valid_cnt;
+
+
+                    ids_vec.push_back(ids);
+                    score_vec.push_back(score);
+                }
+
 
             } else {
                 if (m2_i + 1 < m2.cols() && m1_i + 1 < m1.cols()) {
@@ -902,8 +919,6 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
 
         if (lines.size() >= data_num){
             // timer to record run time
-            time_util::Timer timer;
-            timer.start();
 
 
             // get laserscan angle data
@@ -971,6 +986,7 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
             model = trans_laser.inverse()*model;
             ROS_ERROR_STREAM("get  model pose \n"<<model<<"\n get relative model pose \n"<<model << "\n get laser in map  pose \n"<<trans_laser.matrix()<<"\n inverse \n"<< trans_laser.inverse().matrix());
 
+            timer.start();
 
             // check markers base  on distance
             // new lines vector
@@ -988,6 +1004,11 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
             std::vector<std::vector<int>> id_vec;
             std::vector<double> score_vec;
             matchMarkers(DistMatrix_model, DistMatrix_detect, id_vec, score_vec);
+            if (score_vec.empty()) {
+                ROS_ERROR("empty score_vec  failue");
+
+                return targets;
+            }
             std::cout << "=================\n id\n";
             for (auto i:id_vec) {
                 for (auto j : i) {
@@ -1003,6 +1024,8 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
 
             }
             std::cout << "\n=================" << std::endl;
+            ROS_ERROR("match  time %.4f", timer.elapsedSeconds());
+
 
 
 
@@ -1055,10 +1078,9 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
 
                 int status = sm.solve();
                 auto meanerror = sm.getMeanError();
-
+# if 0
                 ROS_ERROR_STREAM("get x \n"<<x<<std::endl << "error "<<meanerror);
-                x = sm.getParam();
-
+#endif
 
 
 #endif
@@ -1109,6 +1131,9 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
             auto meanerror2 = sm2.getMeanError();
 
             auto x2 = sm2.getParam();
+#if 0
+            x2 = sm.getParam();
+#endif
 #if 0
             ROS_ERROR_STREAM("get x2 \n"<<x2<<std::endl << "error "<<meanerror2);
 #endif
@@ -1257,8 +1282,8 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
             }
 
 
-
-
+        } else {
+            ROS_ERROR("get marker num [%d] not enough", lines.size());
         }
 
 
@@ -1416,7 +1441,7 @@ void line_extraction::TargetPublish::publish(){
 
     }
 
-    std::cout<<"start detect "<<std::endl;
+//    ROS_ERROR("start detect ");
     ros::Time tn = ros::Time::now();
 
 
@@ -1460,10 +1485,12 @@ void line_extraction::TargetPublish::publish(){
     }
     odomToBase_tf_ = odomToBase_tf;
 
-//    ROS_ERROR("start detect!!");
+    ROS_ERROR("start detect!!");
 
 
     auto targets = sd_.detect();
+    ROS_ERROR("done detect!!");
+
     if(targets.size() == 1){
 
         // publish
