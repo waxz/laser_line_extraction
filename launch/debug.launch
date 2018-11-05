@@ -22,7 +22,7 @@
 
   <node name="line_detector_node" pkg="laser_line_extraction" type="line_detector_node">
     <param name="~frequency" value="50.0" />
-    <param name="~frame_id" value="base_laser"/>
+    <param name="~frame_id" value="base_laser_rear"/>
     <param name="~scan_topic" value="scan_rear"/>
     <param name="~publish_markers" value="true" />
     <param name="~bearing_std_dev" value="1e-5"/>
@@ -40,7 +40,7 @@
 
     <param name="~min_line_length" value="0.02"/>
 
-    <param name="~min_line_points" value="4"/>
+    <param name="~min_line_points" value="3"/>
 
     <param name="~use_scan" value="false"/>
 
@@ -48,10 +48,10 @@
     <param name="marker_type" value="points-array"/>
     <param name="use_fit_line" value="false"/>
     <param name="debug" value="false"/>
-    <param name="max_range" value="5.1"/>
+    <param name="max_range" value="8.1"/>
     <param name="min_angle" value="-1.575"/>
     <param name="max_angle" value="1.575"/>
-    <param name="min_intensity" value="1200"/>
+    <param name="min_intensity" value="1000"/>
 
     <param name="filter_window" value="4"/>
 
@@ -81,11 +81,17 @@
     <param name="pub_pose" value="false"/>
     <param name="triangle_direction" value="-1"/>
 
-    <param name="pub_lighthouse" value="true" type="bool"/>
-    <param name="broadcast_map_odom_tf" value="false" type="bool"/>
+
     <param name="max_marker_length" value="0.09" type="double"/>
     <param name="max_marker_initial_dist" value="5.5" type="double"/>
     <param name="max_marker_dist_diff" value="0.08" type="double"/>
+
+    <param name="pub_lighthouse" value="false" type="bool"/>
+    <param name="broadcast_map_odom_tf" value="false" type="bool"/>
+    <param name="pub_initial_pose" value="true" type="bool"/>
+    <param name="max_search_radius" value="0.5" type="double"/>
+    <param name="min_match_valid" value="2" type="int"/>
+
 
     <param name="min_update_d" value="-0.02" type="double"/>
     <param name="min_update_a" value="-0.02" type="double"/>
@@ -96,23 +102,23 @@
 
     <rosparam>
       points_array :
-      - x : 39.53
-      y : 0.33
-      - x : 39.33
-      y : 0.06
-      - x : 39.13
-      y : -0.21
+        - x : 39.027
+          y : -0.252
+        - x : 37.512
+          y : -1.020
+        - x : 37.604
+          y : -6.984
       target_pose :
-      x : 3.85
-      y : -0.2
-      yaw : 0.6108
+        x : 0.0
+        y : -0.0
+        yaw : 0.0
 
     </rosparam>
 
   </node>
 
-  <node name="tf1" pkg="tf" type="static_transform_publisher" args="0 0 0 0 0 0 1 odom base_link 20"/>
-  <node name="tf2" pkg="tf" type="static_transform_publisher" args="0.1 0 0 0 0 0 1 base_link base_laser 20"/>
+  <node name="tf1" pkg="tf" type="static_transform_publisher" args="42.414 -2.861 -0.001 -0.002 0.001 -0.069 0.998 odom base_link 20"/>
+  <node name="tf2" pkg="tf" type="static_transform_publisher" args="-0.240 0.000 0.160 0.000 0.000 1.000 0.000 base_link base_laser_rear 20"/>
   <node name="tf3" pkg="tf" type="static_transform_publisher" args="0 0 0 0 0 0 1 map odom 20"/>
 
 

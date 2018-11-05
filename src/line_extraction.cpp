@@ -100,7 +100,10 @@ void LineExtraction::extractLines(std::vector<Line>& lines)
         }
 
         // Split indices into lines and filter out short and sparse lines
+        std::cout<<"start split "<<std::endl;
         splitIndice(filtered_indices_);
+        std::cout<<"end split "<<std::endl;
+
         // split according to to indice distance
 
 
@@ -429,12 +432,18 @@ void LineExtraction::splitIndice(const std::vector<unsigned int>& indices)
         return;
     }
 
+    std::cout<<"indices \n";
+    for(auto t: indices){
+        std::cout<<t<<",";
+    }
+    std::cout<<std::endl;
+
     Line line(c_data_, r_data_, params_, indices);
     line.endpointFit();
-    double dist_max = 0;
-    double gap_max = 0;
+    double dist_max = 0.0;
+    double gap_max = 0.0;
     int indice_gap_max = 1;
-    double dist, gap, indice_gap;
+    double dist = 0.0 , gap = 0.0 , indice_gap = 0.0;
     int i_max = 0, i_gap = 0, i_indice_gap = 0;
 
     // Find the farthest point and largest gap
@@ -503,13 +512,29 @@ void LineExtraction::splitIndice(const std::vector<unsigned int>& indices)
         i_split = (indice_gap_max >= params_.max_indice_gap) ? i_indice_gap : i_split;
         std::vector<unsigned int> first_split(&indices[0], &indices[i_split +1]);
         std::vector<unsigned int> second_split(indices.begin() + i_split + 1, indices.end());
-        if (i_split + 1  >= params_.min_line_points){
+        std::cout<<"first_split \n";
+        for(auto t: first_split){
+            std::cout<<t<<",";
+        }
+        std::cout<<std::endl;
+        std::cout<<"second_split \n";
+        for(auto t: second_split){
+            std::cout<<t<<",";
+        }
+        std::cout<<std::endl;
+        if (static_cast<int >(i_split + 1 ) >=static_cast<int >( params_.min_line_points)){
+            std::cout<<"split next f"<<std::endl;
+
             split(first_split);
         }
-        if (indices.size() - i_split -1 >= params_.min_line_points){
+        if (static_cast<int >(indices.size() - i_split -1) >= static_cast<int >(params_.min_line_points)){
+            std::cout<<"split next s"<<std::endl;
+
             split(second_split);
 
         }
+        std::cout<<"split done"<<std::endl;
+
     }
 
 }
