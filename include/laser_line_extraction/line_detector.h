@@ -169,6 +169,8 @@ namespace line_extraction{
         double max_marker_length_;
         double max_marker_initial_dist_;
         double max_marker_dist_diff_;
+        double max_search_radius_;
+        int min_match_valid_;
 
         double min_update_d_;
         double min_update_a_;
@@ -183,6 +185,7 @@ namespace line_extraction{
         tf::Transform mapToOdom_tf_;
         geometry_msgs::PoseStamped map_odom_pose_;
         bool broadcast_map_odom_tf_;
+        bool pub_initial_pose_;
 
 
 

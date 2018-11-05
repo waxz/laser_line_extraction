@@ -233,10 +233,13 @@ void line_extraction::SimpleTriangleDetector::initParams(){
     nh_private_.param("max_marker_dist_diff",max_marker_dist_diff_,0.05);
     nh_private_.param("min_update_d",min_update_d_,0.1);
     nh_private_.param("min_update_a",min_update_a_,0.1);
+    nh_private_.param("max_search_radius",max_search_radius_, 0.3);
+    nh_private_.param("min_match_valid",min_match_valid_, 3);
 
     // return marker_in_base or map_odom_tf
     nh_private_.param("broadcast_map_odom_tf", broadcast_map_odom_tf_, false);
 
+    nh_private_.param("pub_initial_pose", pub_initial_pose_, false);
 
     nh_private_.param("x_conv",x_conv_, 0.05);
     nh_private_.param("y_conv",y_conv_, 0.05);
@@ -496,9 +499,9 @@ void line_extraction::SimpleTriangleDetector::trackMarkers(const Eigen::MatrixXd
     // search
     bool get;
     double min_diff = (m2.colwise() - m1.col(m1_i)).colwise().norm().minCoeff();
-    get = min_diff < max_marker_dist_diff_;
+    get = min_diff < max_search_radius_;
     if (get) {
-        bool get2 = (m2.col(m2_i) - m1.col(m1_i)).norm() < max_marker_dist_diff_;
+        bool get2 = (m2.col(m2_i) - m1.col(m1_i)).norm() < max_search_radius_;
 
 
         if (get2) {
@@ -510,16 +513,36 @@ void line_extraction::SimpleTriangleDetector::trackMarkers(const Eigen::MatrixXd
                 Eigen::MatrixXd tmp_m = m1;
                 int valid_cnt = 0;
                 for (int i = 0; i < ids.size(); i++) {
-                    if (ids[i] > 0) {
+                    if (ids[i] >= 0) {
                         valid_cnt++;
                         tmp_m.col(i) = m2.col(ids[i]);
                     }
                 }
+                if (valid_cnt >= min_match_valid_) {
+                    Eigen::MatrixXd model_matrix(2, valid_cnt), detect_matrix(2, valid_cnt);
+                    int id = 0;
+                    for (int i = 0; i < ids.size(); i++) {
+                        if (ids[i] >= 0) {
+                            model_matrix.col(id) = m1.col(i);
+                            detect_matrix.col(id) = m2.col(ids[i]);
 
-                score = (m1 - tmp_m).norm() / valid_cnt;
+                            id ++;
+                        }
+                    }
 
-                ids_vec.push_back(ids);
-                score_vec.push_back(score);
+                    // get dist matrix of match points
+                    // get matrix norm
+                    Eigen::MatrixXd DistMatrix_detect = eigen_util::getDistMatrix(detect_matrix);
+                    Eigen::MatrixXd DistMatrix_model = eigen_util::getDistMatrix(model_matrix);
+
+
+                    score = (DistMatrix_detect - DistMatrix_model).norm() / (0.5 * pow(static_cast<double >(model_matrix.cols() - 1.0), 2));
+
+
+                    ids_vec.push_back(ids);
+                    score_vec.push_back(score);
+                }
+
 
             } else {
                 if (m2_i + 1 < m2.cols() && m1_i + 1 < m1.cols()) {
@@ -969,7 +992,7 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
 
             eigen_util::TransformationMatrix2d trans_laser(mapToLaser_tf.getOrigin().x(), mapToLaser_tf.getOrigin().y(), tf::getYaw(mapToLaser_tf.getRotation()));
             model = trans_laser.inverse()*model;
-            ROS_ERROR_STREAM("get  model pose \n"<<model<<"\n get relative model pose \n"<<model << "\n get laser in map  pose \n"<<trans_laser.matrix()<<"\n inverse \n"<< trans_laser.inverse().matrix());
+            ROS_ERROR_STREAM("get  model pose \n"<<origin_pos<<"\n get relative model pose \n"<<model << "\n get laser in map  pose \n"<<trans_laser.matrix()<<"\n inverse \n"<< trans_laser.inverse().matrix());
 
 
             // check markers base  on distance
@@ -981,13 +1004,24 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
                 detect_lines(1, i) = 0.5 * (lines[i].getStart()[1] + lines[i].getEnd()[1]);
 
             }
+            ROS_ERROR_STREAM("get  detect_lines pose \n"<<detect_lines);
 
             Eigen::MatrixXd DistMatrix_detect = eigen_util::getDistMatrix(detect_lines);
             Eigen::MatrixXd DistMatrix_model = eigen_util::getDistMatrix(model);
 
             std::vector<std::vector<int>> id_vec;
             std::vector<double> score_vec;
+#if 0
             matchMarkers(DistMatrix_model, DistMatrix_detect, id_vec, score_vec);
+#endif
+#if 1
+            trackMarkers(model,detect_lines, id_vec,score_vec );
+#endif
+            if (score_vec.empty()) {
+                ROS_ERROR("empty score_vec  failue");
+
+                return targets;
+            }
             std::cout << "=================\n id\n";
             for (auto i:id_vec) {
                 for (auto j : i) {
@@ -1022,22 +1056,27 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
             // compute fit error
             // choose best fit result
 
+            std::valarray<float > xs, ys;
+            lsd_.getXsYs(xs,ys);
+            double best_fit_error = 10.0;
+            auto best_x = x;
+            opt_util::SimpleSolver<opt_util::AngleFunctor> sm;
+            opt_util::SimpleSolver<opt_util::AngleRangeFunctor> sm2;
+
+            for(auto v:id_vec){
+
+                // final match line segments
+                decltype(lines) matchlines;
+                for (auto i : v) {
+                    matchlines.push_back(lines[i]);
+                }
 
 
-
-            // final match line segments
-            decltype(lines) matchlines;
-            for (auto i : id_vec[best_i]) {
-                matchlines.push_back(lines[i]);
-            }
-            matchLines_ = matchlines;
-
-
-            // fit two model
-            // model 1) : angle only model
-            // model 2) : 2d position model
+                // fit two model
+                // model 1) : angle only model
+                // model 2) : 2d position model
 #if 0
-            // model 1
+                // model 1
                 // fill measureData from laser
                 for (int di = 0;di <data_num;di++){
                     auto id1 = matchlines[di].getIndices();
@@ -1046,7 +1085,6 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
 
                 ROS_ERROR_STREAM("model 1 measuredata \n"<<measureData);
 
-                opt_util::SimpleSolver<opt_util::AngleFunctor> sm;
 
                 sm.updataModel(model);
 
@@ -1055,10 +1093,11 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
 
                 int status = sm.solve();
                 auto meanerror = sm.getMeanError();
+                auto x1 = sm.getParam();
 
-                ROS_ERROR_STREAM("get x \n"<<x<<std::endl << "error "<<meanerror);
-                x = sm.getParam();
-
+# if 1
+                ROS_ERROR_STREAM("get x \n"<<x1<<std::endl << "error "<<meanerror);
+#endif
 
 
 #endif
@@ -1067,62 +1106,87 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
 
 
 
-            // model 2
-            std::vector<double> mdata;
-            std::valarray<float > xs, ys;
-            lsd_.getXsYs(xs,ys);
-            for(int di = 0 ; di<data_num ;di ++){
-                auto id1 = matchlines[di].getIndices();
+                // model 2
+                std::vector<double> mdata;
 
-                for (int dj=0;dj < id1.size(); dj++){
+                for(int di = 0 ; di<data_num ;di ++){
+                    if (v[di] < 0){
+                        continue;
+                    }
+                    auto id1 = matchlines[di].getIndices();
 
-                    // push x
-                    mdata.push_back(static_cast<double> (xs[id1[dj]]) );
-                    // y
-                    mdata.push_back(static_cast<double> (ys[id1[dj]]) );
-                    // index
-                    mdata.push_back(model(0,di));
-                    mdata.push_back(model(1,di));
+                    for (int dj=0;dj < id1.size(); dj++){
 
+                        // push x
+                        mdata.push_back(static_cast<double> (xs[id1[dj]]) );
+                        // y
+                        mdata.push_back(static_cast<double> (ys[id1[dj]]) );
+                        // index
+                        mdata.push_back(model(0,di));
+                        mdata.push_back(model(1,di));
+
+                    }
                 }
-            }
-            measureData2 = Eigen::Map<Eigen::MatrixXd>(mdata.data(), 4, mdata.size()/4);
+                measureData2 = Eigen::Map<Eigen::MatrixXd>(mdata.data(), 4, mdata.size()/4);
 
 #if 0
-            ROS_ERROR_STREAM("model 2 measuredata \n"<<measureData2);
+                ROS_ERROR_STREAM("model 2 measuredata \n"<<measureData2);
 #endif
 
 
-            opt_util::SimpleSolver<opt_util::AngleRangeFunctor> sm2;
 
-            sm2.updataModel(model);
+                sm2.updataModel(model);
 
-            sm2.setParams(x);
+                sm2.setParams(x);
 
-            sm2.feedData(measureData2);
+                sm2.feedData(measureData2);
 
             timer.stop();
             timer.start();
 
-            int ststus2 = sm2.solve();
+                int ststus2 = sm2.solve();
 
-            auto meanerror2 = sm2.getMeanError();
+                auto meanerror2 = sm2.getMeanError();
 
-            auto x2 = sm2.getParam();
+                auto x2 = sm2.getParam();
+# if 1
+                ROS_ERROR_STREAM("get x2 \n"<<x2<<std::endl << "error "<<meanerror2);
+#endif
+
+
+                // use x1
 #if 0
-            ROS_ERROR_STREAM("get x2 \n"<<x2<<std::endl << "error "<<meanerror2);
+                if (meanerror < best_fit_error){
+                    best_fit_error = meanerror;
+                    best_x = x1;
+                }
+#endif
+                // use x2
+                if (meanerror2 < best_fit_error){
+                    best_fit_error = meanerror2;
+
+                    best_x = x2;
+                }
+
+            }
+
+
+
+
+#if 1
+            ROS_ERROR_STREAM("get best_x \n"<<best_x<<std::endl << "best_fit_error "<<best_fit_error);
 #endif
             auto t = timer.elapsedSeconds();
             ROS_ERROR("levmarq fit time %.4f",t);
             // check error
             //rule 1: mean error
             // rule 2: relative angle
-            if (meanerror2 > max_fit_error_  ){
+            if (best_fit_error > max_fit_error_  ){
                 return targets;
             }
 
             // get transform position
-            eigen_util::TransformationMatrix2d trans2(x2(0), x2(1), x2(2));
+            eigen_util::TransformationMatrix2d trans2(best_x(0), best_x(1), best_x(2));
 
 
             // get observed model
@@ -1240,13 +1304,14 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
             tf::poseTFToMsg(mapToOdom_tf_, map_odom_pose_.pose);
 
             // reset amcl
-#if 0
-            initPose_.header.stamp = ros::Time::now();
+            // reset initial pose or broadcast_map_odom_tf
+
+            if(pub_initial_pose_){
+                initPose_.header.stamp = ros::Time::now();
                 tf::poseTFToMsg(mapToOdom_tf_*odomToBase_tf_,initPose_.pose.pose);
 
                 initPosePub_.publish(initPose_);
-#endif
-
+            }
             if(broadcast_map_odom_tf_){
                 nh_private_.setParam("/amcl/tf_broadcast", false);
                 targets.push_back(map_odom_pose_);
@@ -1257,8 +1322,8 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
             }
 
 
-
-
+        } else {
+            ROS_ERROR("get marker num [%d] not enough", int(lines.size()));
         }
 
 
@@ -1572,8 +1637,11 @@ void line_extraction::TargetPublish::publish(){
 
             return;
         } else{
-            triangle_in_base_.header.frame_id = "detect_failed" ;
-            lighthouse_pose_pub_.publish(triangle_in_base_);
+            if (pub_lighthouse_){
+                triangle_in_base_.header.frame_id = "detect_failed" ;
+                lighthouse_pose_pub_.publish(triangle_in_base_);
+            }
+
 
         }
         if(dur.toSec()<expire_sec_){
