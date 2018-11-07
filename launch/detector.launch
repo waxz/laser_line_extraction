@@ -23,7 +23,7 @@
     <node name="line_detector_node" pkg="laser_line_extraction" type="line_detector_node">
         <param name="~frequency" value="50.0" />
         <param name="~frame_id" value="base_laser" />
-        <param name="~scan_topic" value="scan_rear"/>
+        <param name="~scan_topic" value="scan"/>
         <param name="~publish_markers" value="true" />
         <param name="~bearing_std_dev" value="1e-5" />
         <param name="~range_std_dev" value="0.02" />
@@ -76,22 +76,22 @@
         <param name="max_fit_error" value="0.05"/>
 
 
-        <param name="expire_sec" value="600"/>
+        <param name="expire_sec" value="1"/>
 
-        <param name="broadcast_tf" value="true"/>
+        <param name="broadcast_tf" value="false"/>
         <param name="pub_pose" value="false"/>
         <param name="triangle_direction" value="-1"/>
 
 
         <param name="max_marker_length" value="0.09" type="double"/>
         <param name="max_marker_initial_dist" value="5.5" type="double"/>
-        <param name="max_marker_dist_diff" value="0.08" type="double"/>
+        <param name="max_marker_dist_diff" value="0.1" type="double"/>
 
         <param name="pub_lighthouse" value="false" type="bool"/>
-        <param name="broadcast_map_odom_tf" value="false" type="bool"/>
-        <param name="pub_initial_pose" value="true" type="bool"/>
+        <param name="broadcast_map_odom_tf" value="true" type="bool"/>
+        <param name="pub_initial_pose" value="false" type="bool"/>
         <param name="max_search_radius" value="0.5" type="double"/>
-        <param name="min_match_valid" value="2" type="int"/>
+        <param name="min_match_valid" value="3" type="int"/>
 
         <param name="min_update_d" value="-0.02" type="double"/>
         <param name="min_update_a" value="-0.02" type="double"/>
@@ -102,12 +102,14 @@
 
     <rosparam>
       points_array :
-        - x : 39.027
-          y : -0.252
-        - x : 37.512
-          y : -1.020
-        - x : 37.604
-          y : -6.984
+        - x : 1.889
+          y : 3.356
+        - x : 1.684
+          y : 3.819
+        - x : 0.787
+          y : 3.413
+        - x : 1.018
+          y : 2.944
       target_pose :
         x : 0.0
         y : -0.0

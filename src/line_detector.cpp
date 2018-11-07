@@ -497,11 +497,15 @@ void line_extraction::SimpleTriangleDetector::trackMarkers(const Eigen::MatrixXd
     // data m2
 
     // search
-    bool get;
+    if (m2_i >= m2.cols() || m1_i >= m1.cols() || m2_i <0 || m1_i < 0){
+        return;
+    }
+
     double min_diff = (m2.colwise() - m1.col(m1_i)).colwise().norm().minCoeff();
-    get = min_diff < max_search_radius_;
+    bool get = min_diff < max_search_radius_;
     if (get) {
-        bool get2 = (m2.col(m2_i) - m1.col(m1_i)).norm() < max_search_radius_;
+        double min_diff2 = (m2.col(m2_i) - m1.col(m1_i)).norm();
+        bool get2 =  min_diff2 < max_search_radius_;
 
 
         if (get2) {
@@ -545,20 +549,21 @@ void line_extraction::SimpleTriangleDetector::trackMarkers(const Eigen::MatrixXd
 
 
             } else {
-                if (m2_i + 1 < m2.cols() && m1_i + 1 < m1.cols()) {
-                    trackMarkers(m1, m2, ids_vec, score_vec, ids, m1_i + 1, m2_i + 1);
-                }
+                trackMarkers(m1, m2, ids_vec, score_vec, ids, m1_i + 1, 0);
 
             }
 
             // roll back
             auto tmp_vec = ids;
+#if 0
+            tmp_vec.pop_back();
 
-            if (m2_i + 1 < m2.cols() && m1_i < m1.cols()) {
-                tmp_vec.pop_back();
+            trackMarkers(m1, m2, ids_vec, score_vec, tmp_vec, m1_i, 0);
+#endif
+            tmp_vec.push_back(-1);
+            trackMarkers(m1, m2, ids_vec, score_vec, tmp_vec, m1_i + 1 , 0);
 
-                trackMarkers(m1, m2, ids_vec, score_vec, tmp_vec, m1_i, m2_i + 1);
-            }
+
 //            auto tmp_vec = ids;
 //            for (int i = m1_i; i >= 0; i--) {
 //                if (m2_i +1 < m2.cols() && m1_i + 1 < m1.cols()) {
@@ -571,21 +576,54 @@ void line_extraction::SimpleTriangleDetector::trackMarkers(const Eigen::MatrixXd
 //            }
 
         } else {
-            if (m2_i + 1 < m2.cols() && m1_i < m1.cols()) {
-                trackMarkers(m1, m2, ids_vec, score_vec, ids, m1_i, m2_i + 1);
-            }
+            trackMarkers(m1, m2, ids_vec, score_vec, ids, m1_i, m2_i + 1);
         }
     } else {
 
         // fail
         // push -1
         // find next
-        if (m2_i < m2.cols() && m1_i + 1 < m1.cols()) {
-            ids.push_back(-1);
-            trackMarkers(m1, m2, ids_vec, score_vec, ids, m1_i + 1, m2_i);
-        } else {
-            return;
+        ids.push_back(-1);
+        if (ids.size() == m1.cols()) {
+            double score;
+
+            Eigen::MatrixXd tmp_m = m1;
+            int valid_cnt = 0;
+            for (int i = 0; i < ids.size(); i++) {
+                if (ids[i] >= 0) {
+                    valid_cnt++;
+                    tmp_m.col(i) = m2.col(ids[i]);
+                }
+            }
+            if (valid_cnt >= min_match_valid_) {
+                Eigen::MatrixXd model_matrix(2, valid_cnt), detect_matrix(2, valid_cnt);
+                int id = 0;
+                for (int i = 0; i < ids.size(); i++) {
+                    if (ids[i] >= 0) {
+                        model_matrix.col(id) = m1.col(i);
+                        detect_matrix.col(id) = m2.col(ids[i]);
+
+                        id ++;
+                    }
+                }
+
+                // get dist matrix of match points
+                // get matrix norm
+                Eigen::MatrixXd DistMatrix_detect = eigen_util::getDistMatrix(detect_matrix);
+                Eigen::MatrixXd DistMatrix_model = eigen_util::getDistMatrix(model_matrix);
+
+
+                score = (DistMatrix_detect - DistMatrix_model).norm() / (0.5 * pow(static_cast<double >(model_matrix.cols() - 1.0), 2));
+
+
+                ids_vec.push_back(ids);
+                score_vec.push_back(score);
+            }
+
+
         }
+        trackMarkers(m1, m2, ids_vec, score_vec, ids, m1_i + 1, 0);
+
 
     }
 }
@@ -921,9 +959,9 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
         // get line segmentation
 
         // get 3 or 4 point
-        int data_num = (board_or_shelf)? 3:4;
+        int data_num = params_.size();
 
-        if (lines.size() >= data_num){
+        if (lines.size() >= min_match_valid_){
             // timer to record run time
             time_util::Timer timer;
             timer.start();
@@ -947,7 +985,6 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
 
             // fill model data
             for (int di = 0;di <data_num;di++){
-                auto id1 = lines[di].getIndices();
                 model(0,di) = params_[di]["x"];
                 model(1,di) = params_[di]["y"];
             }
@@ -1004,7 +1041,7 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
                 detect_lines(1, i) = 0.5 * (lines[i].getStart()[1] + lines[i].getEnd()[1]);
 
             }
-            ROS_ERROR_STREAM("get  detect_lines pose \n"<<detect_lines);
+            ROS_ERROR_STREAM("get detect_lines pose \n"<<detect_lines);
 
             Eigen::MatrixXd DistMatrix_detect = eigen_util::getDistMatrix(detect_lines);
             Eigen::MatrixXd DistMatrix_model = eigen_util::getDistMatrix(model);
@@ -1068,6 +1105,9 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
                 // final match line segments
                 decltype(lines) matchlines;
                 for (auto i : v) {
+                    if (i < 0){
+                        continue;
+                    }
                     matchlines.push_back(lines[i]);
                 }
 
@@ -1109,11 +1149,13 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
                 // model 2
                 std::vector<double> mdata;
 
-                for(int di = 0 ; di<data_num ;di ++){
-                    if (v[di] < 0){
+                int model_cols = model.cols();
+                for(int di = 0 ; di < model_cols ;di ++){
+                    int dm = v[di];
+                    if (dm < 0){
                         continue;
                     }
-                    auto id1 = matchlines[di].getIndices();
+                    auto id1 = lines[dm].getIndices();
 
                     for (int dj=0;dj < id1.size(); dj++){
 
