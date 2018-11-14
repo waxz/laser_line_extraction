@@ -18,6 +18,8 @@
 #include <std_msgs/String.h>
 #include <std_msgs/Header.h>
 
+#include <yocs_msgs/Waypoint.h>
+
 #include <string>
 
 // sort points in triangle
@@ -125,6 +127,8 @@ namespace line_extraction{
         ros::Publisher targetPub_;
         ros::Publisher pointsPub_;
         ros::Publisher initPosePub_;
+        ros::Publisher basePosePub_;
+        ros::Publisher waypoint_pub_;
 
         double x_conv_;
         double y_conv_;
@@ -184,8 +188,13 @@ namespace line_extraction{
         tf::Transform odomToBase_tf_;
         tf::Transform mapToOdom_tf_;
         geometry_msgs::PoseStamped map_odom_pose_;
+        yocs_msgs::Waypoint waypoint_goal_;
         bool broadcast_map_odom_tf_;
         bool pub_initial_pose_;
+        bool pub_base_pose_;
+        bool pub_waypoint_goal_;
+
+        bool firstPub_;
 
 
 
@@ -208,6 +217,8 @@ namespace line_extraction{
         void trackMarkers(const Eigen::MatrixXd &m1, const Eigen::MatrixXd &m2, std::vector<std::vector<int> > &ids_vec,
                           std::vector<double> &score_vec, std::vector<int> ids = std::vector<int>(),
                           int m1_i = 0, int m2_i = 0);
+
+        void reset();
 
     };
 
@@ -308,6 +319,7 @@ namespace line_extraction{
         bool broadcast_tf_;
 
         bool broadcast_map_odom_tf_;
+        bool use_ekf_;
 
         bool pub_pose_;
 

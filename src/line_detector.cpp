@@ -240,10 +240,12 @@ void line_extraction::SimpleTriangleDetector::initParams(){
     nh_private_.param("broadcast_map_odom_tf", broadcast_map_odom_tf_, false);
 
     nh_private_.param("pub_initial_pose", pub_initial_pose_, false);
+    nh_private_.param("pub_base_pose", pub_base_pose_, true);
 
     nh_private_.param("x_conv",x_conv_, 0.05);
     nh_private_.param("y_conv",y_conv_, 0.05);
     nh_private_.param("yaw_conv",yaw_conv_, 0.05);
+    nh_private_.param("pub_waypoint_goal", pub_waypoint_goal_, false);
 
 
 
@@ -358,6 +360,9 @@ line_extraction::SimpleTriangleDetector::SimpleTriangleDetector(ros::NodeHandle 
     pointsPub_ = nh_.advertise<geometry_msgs::PoseArray>("targetPoints",1);
     initPosePub_ = nh_.advertise<geometry_msgs::PoseWithCovarianceStamped>("initialpose",1);
 
+    basePosePub_ = nh_private_.advertise<geometry_msgs::PoseWithCovarianceStamped>("pose",1);
+    waypoint_pub_ = nh_.advertise<yocs_msgs::Waypoint>("waypoint_revise_sub", 1);
+
     initPose_.header.frame_id = "map";
     initPose_.pose.covariance[0] = x_conv_;
     initPose_.pose.covariance[7] = y_conv_;
@@ -374,13 +379,21 @@ line_extraction::SimpleTriangleDetector::SimpleTriangleDetector(ros::NodeHandle 
     odom_frame_id_ = "odom";
     base_frame_id_ = "base_link";
     matchLines_.clear();
+    waypoint_goal_.name = "wp_revise";
+    waypoint_goal_.header.frame_id = "map";
+
 
     track_marker_ = false;
+    firstPub_ = true;
 
 
 
 
 };
+void line_extraction::SimpleTriangleDetector::reset() {
+    firstPub_ = true;
+
+}
 line_extraction::SimpleTriangleDetector::~SimpleTriangleDetector() {
     nh_private_.setParam("/amcl/tf_broadcast", true);
 
@@ -555,10 +568,10 @@ void line_extraction::SimpleTriangleDetector::trackMarkers(const Eigen::MatrixXd
 
             // roll back
             auto tmp_vec = ids;
-#if 0
-            tmp_vec.pop_back();
 
-            trackMarkers(m1, m2, ids_vec, score_vec, tmp_vec, m1_i, 0);
+            tmp_vec.pop_back();
+#if 1
+            trackMarkers(m1, m2, ids_vec, score_vec, tmp_vec, m1_i, m2_i + 1);
 #endif
             tmp_vec.push_back(-1);
             trackMarkers(m1, m2, ids_vec, score_vec, tmp_vec, m1_i + 1 , 0);
@@ -1348,11 +1361,15 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
             // reset amcl
             // reset initial pose or broadcast_map_odom_tf
 
+            initPose_.header.stamp = ros::Time::now();
+            tf::poseTFToMsg(mapToOdom_tf_*odomToBase_tf_,initPose_.pose.pose);
+
             if(pub_initial_pose_){
-                initPose_.header.stamp = ros::Time::now();
-                tf::poseTFToMsg(mapToOdom_tf_*odomToBase_tf_,initPose_.pose.pose);
 
                 initPosePub_.publish(initPose_);
+            }
+            if(pub_base_pose_){
+                basePosePub_.publish(initPose_);
             }
             if(broadcast_map_odom_tf_){
                 nh_private_.setParam("/amcl/tf_broadcast", false);
@@ -1362,6 +1379,15 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
                 targets.push_back(pose);
 
             }
+            if(pub_waypoint_goal_ && firstPub_){
+                tf::poseTFToMsg(origin_pose_tf,waypoint_goal_.pose);
+
+                waypoint_goal_.header =  initPose_.header;
+
+                waypoint_pub_.publish(waypoint_goal_);
+
+            }
+            firstPub_ = false;
 
 
         } else {
@@ -1454,6 +1480,8 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
     nh_private_.param("min_update_d",min_update_d_,0.1);
     nh_private_.param("min_update_a",min_update_a_,0.1);
 
+    nh_private_.param("use_ekf", use_ekf_, false);
+
 
     auto res = listener_.createSubcriber<std_msgs::Header>(cmd_topic_,1);
     cmd_data_ptr_ = std::get<0>(res);
@@ -1462,7 +1490,7 @@ line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandl
 
 
     lighthouse_pose_topic_ = "lighthouse_pose";
-    lighthouse_pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>(lighthouse_pose_topic_,1);
+    lighthouse_pose_pub_ = nh_private_.advertise<geometry_msgs::PoseStamped>(lighthouse_pose_topic_,1);
 
 
     odomToBase_tf_.setIdentity();
@@ -1513,6 +1541,8 @@ void line_extraction::TargetPublish::publish(){
 
                 nh_private_.setParam("/amcl/tf_broadcast", true);
             }
+            // stop detector
+            sd_.reset();
             return;
         }
 
@@ -1636,7 +1666,7 @@ void line_extraction::TargetPublish::publish(){
             tf::poseTFToMsg(marker_tf * target_in_marker_tf_, triangle_in_base_.pose);
             lighthouse_pose_pub_.publish(triangle_in_base_);
         }
-        if(broadcast_map_odom_tf_){
+        if(broadcast_map_odom_tf_ && ! use_ekf_){
             ros::Duration transform_tolerance;
             transform_tolerance.fromSec(0.1);
             ros::Time transform_expiration = (tn + transform_tolerance);
@@ -1657,7 +1687,7 @@ void line_extraction::TargetPublish::publish(){
             pubthreadClass_.start();
         }
 
-        if(broadcast_map_odom_tf_ &&!tfthreadClass_.isRunning() ){
+        if(broadcast_map_odom_tf_ &&!tfthreadClass_.isRunning() && ! use_ekf_ ){
             tfthreadClass_.start();
 
         }

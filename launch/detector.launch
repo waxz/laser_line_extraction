@@ -52,7 +52,7 @@
         <param name="max_range" value="8.1"/>
         <param name="min_angle" value="-1.575"/>
         <param name="max_angle" value="1.575"/>
-        <param name="min_intensity" value="1000"/>
+        <param name="min_intensity" value="2300"/>
 
         <param name="filter_window" value="4"/>
 
@@ -76,10 +76,9 @@
         <param name="max_fit_error" value="0.05"/>
 
 
-        <param name="expire_sec" value="1"/>
+        <param name="expire_sec" value="10"/>
 
-        <param name="broadcast_tf" value="false"/>
-        <param name="pub_pose" value="false"/>
+
         <param name="triangle_direction" value="-1"/>
 
 
@@ -87,9 +86,13 @@
         <param name="max_marker_initial_dist" value="5.5" type="double"/>
         <param name="max_marker_dist_diff" value="0.1" type="double"/>
 
+        <param name="broadcast_tf" value="false"/>
+        <param name="pub_pose" value="false"/>
         <param name="pub_lighthouse" value="false" type="bool"/>
         <param name="broadcast_map_odom_tf" value="true" type="bool"/>
         <param name="pub_initial_pose" value="false" type="bool"/>
+        <param name="pub_waypoint_goal" value="true" type="bool"/>
+
         <param name="max_search_radius" value="0.5" type="double"/>
         <param name="min_match_valid" value="3" type="int"/>
 

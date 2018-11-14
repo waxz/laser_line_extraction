@@ -47,6 +47,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   tf
   visualization_msgs
+  yocs_msgs
 
 )
 
@@ -90,6 +91,8 @@ target_link_libraries(line_detector_lib line_extraction_ros ${catkin_LIBRARIES})
 
 add_executable(line_detector_node src/shape_detector_node.cpp)
 target_link_libraries(line_detector_node line_detector_lib)
+
+add_dependencies(line_detector_node ${catkin_EXPORTED_TARGETS})
 
 #add_executable(shelf_detector_node src/shelf_detector_node.cpp)
 #target_link_libraries(shelf_detector_node line_detector_lib)

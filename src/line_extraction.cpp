@@ -504,10 +504,10 @@ void LineExtraction::splitIndice(const std::vector<unsigned int>& indices)
         std::vector<unsigned int> first_split(&indices[0], &indices[i_split +1]);
         std::vector<unsigned int> second_split(indices.begin() + i_split + 1, indices.end());
         if (i_split + 1  >= params_.min_line_points){
-            split(first_split);
+            splitIndice(first_split);
         }
         if (indices.size() - i_split -1 >= params_.min_line_points){
-            split(second_split);
+            splitIndice(second_split);
 
         }
     }
