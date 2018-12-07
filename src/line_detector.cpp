@@ -509,7 +509,7 @@ void line_extraction::SimpleTriangleDetector::trackMarkers(const Eigen::MatrixXd
     // model m1
     // data m2
 
-    // search
+    // search sensor data, if there is ant point close to point in model
     if (m2_i >= m2.cols() || m1_i >= m1.cols() || m2_i <0 || m1_i < 0){
         return;
     }
@@ -1346,6 +1346,10 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
             tf::poseMsgToTF(origin_pose.pose,origin_pose_tf);
             tf::poseMsgToTF(pose.pose,pose_tf);
 
+
+            //======== function output
+            // marker_pose_in_map and marker_pose_in_laser
+
             // map odom tf
             mapToOdom_tf_ = origin_pose_tf*pose_tf.inverse()*baseToLaser_tf_.inverse()*odomToBase_tf_.inverse();
 
@@ -1407,6 +1411,251 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
 
 
 #endif
+
+void line_extraction::SimpleTriangleDetector::updateParams() {
+
+    nh_private_.getParam("markers_array",params_);
+
+}
+
+bool line_extraction::SimpleTriangleDetector::detectFreeMarkers(tf::Transform mapToLaser_tf,
+                                                                tf::Transform &marker_in_map_tf,
+                                                                tf::Transform &marker_in_laser_tf) {
+
+    marker_in_laser_tf.setIdentity();
+    marker_in_map_tf.setIdentity();
+
+    // first detect lines
+    std::vector<line_extraction::Line> lines;
+    lsd_.getLines(lines, line_extraction::LineSegmentDetector::detectMode::lights);
+
+    // check valid marker num > min_match_valid_
+    if (lines.size() < min_match_valid_){
+
+        ROS_ERROR("Fail, get marker num %d < %d ",int(lines.size()), min_match_valid_);
+
+        return false;
+    }
+
+    //prepare model and measureData
+    // eigen matrix
+    int data_num = params_.size();
+
+    // model 1 data [angle]
+    // only use angle of each marker,
+    // fit transformation move markers([x1,y1,x2,y2,x3,y3])  to get close to angles
+    Eigen::MatrixXd measureData(1, data_num);
+
+    // model 2 data [x,y,xm, ym]
+    // use all points[x1,y1] of each marker,
+    // fit transformation move markers([x1,y1,x2,y2,x3,y3])  to get close to [xm1, ym1, xm2, ym2, xm3, ym3]
+    Eigen::MatrixXd measureData2;
+
+    // may not be useful
+    Eigen::MatrixXd model(2,data_num);
+
+    // initial guess
+    Eigen::VectorXd x(3);
+    x << 0.0, 0.0, 0.0;
+
+    // feed in data from laserscan data
+    // get laserscan angle data
+    lsd_.getAngles(cache_angle_);
+    lsd_.getLaser(latestScan_);
+
+    // fill model data
+    for (int i = 0;i <data_num;i++){
+        model(0,i) = params_[i]["x"];
+        model(1,i) = params_[i]["y"];
+    }
+
+    decltype(model) marker_in_map = model;
+
+
+    // get transormation matrix
+    eigen_util::TransformationMatrix2d trans_maplaser(mapToLaser_tf.getOrigin().x(), mapToLaser_tf.getOrigin().y(), tf::getYaw(mapToLaser_tf.getRotation()));
+
+    // transform marker_in_map to marker_in_laser
+    model = trans_maplaser.inverse()*model;
+
+
+    // match marker template and detect markers
+    Eigen::MatrixXd detect_markers(2, lines.size());
+    for (int i = 0; i < lines.size(); i++) {
+        detect_markers(0, i) = 0.5 * (lines[i].getStart()[0] + lines[i].getEnd()[0]);
+        detect_markers(1, i) = 0.5 * (lines[i].getStart()[1] + lines[i].getEnd()[1]);
+
+    }
+
+    // vector store match result
+    std::vector<std::vector<int>> id_vec;
+    std::vector<double> score_vec;
+    trackMarkers(model,detect_markers, id_vec,score_vec );
+
+    if (score_vec.empty()){
+
+        ROS_ERROR("Match fail: empty score_vec");
+
+        return false;
+    }
+
+    // get best match result
+    // get best choice
+    auto best_i = container_util::argMin(score_vec);
+    auto best_score = score_vec[best_i];
+    if (best_score > max_marker_dist_diff_){
+        ROS_ERROR("Score too big fail: %.3f > %.3f", best_score, max_marker_dist_diff_);
+        return false;
+    }
+
+    std::valarray<float > xs, ys;
+    lsd_.getXsYs(xs,ys);
+    // try each result in id_vec
+
+    opt_util::SimpleSolver<opt_util::AngleFunctor> sm;
+    opt_util::SimpleSolver<opt_util::AngleRangeFunctor> sm2;
+    double best_fit_error = 10.0;
+    auto best_x = x;
+
+    for (auto v : id_vec){
+
+        // not every marker in model has matched point in sensor data
+
+        decltype(lines) matchlines;
+        for (auto i : v) {
+            if (i < 0){
+                continue;
+            }
+            matchlines.push_back(lines[i]);
+        }
+
+        // fit two model
+        // model 1) : angle only model
+        // model 2) : 2d position model
+#if 0
+        // model 1
+        // fill measureData from laser
+        for (int di = 0;di <data_num;di++){
+            auto id1 = matchlines[di].getIndices();
+            measureData(0,di) =  valarray<float>(cache_angle_[std::slice(id1[di],id1.size(),1)]).sum()/id1.size();
+        }
+
+        ROS_ERROR_STREAM("model 1 measuredata \n"<<measureData);
+
+
+        sm.updataModel(model);
+
+        sm.setParams(x);
+        sm.feedData(measureData);
+
+        int status = sm.solve();
+        auto meanerror = sm.getMeanError();
+        auto x1 = sm.getParam();
+
+# if 1
+        ROS_ERROR_STREAM("get x \n"<<x1<<std::endl << "error "<<meanerror);
+#endif
+
+
+#endif
+
+
+        // feed measuredata in model2;
+        // model 2
+        std::vector<double> mdata;
+
+        int model_cols = model.cols();
+        for(int di = 0 ; di < model_cols ;di ++){
+            int dm = v[di];
+            if (dm < 0){
+                continue;
+            }
+            auto id1 = lines[dm].getIndices();
+
+            for (int dj=0;dj < id1.size(); dj++){
+
+                // push x
+                mdata.push_back(static_cast<double> (xs[id1[dj]]) );
+                // y
+                mdata.push_back(static_cast<double> (ys[id1[dj]]) );
+                // index
+                mdata.push_back(model(0,di));
+                mdata.push_back(model(1,di));
+
+            }
+        }
+        measureData2 = Eigen::Map<Eigen::MatrixXd>(mdata.data(), 4, mdata.size()/4);
+
+
+        sm2.updataModel(model);
+
+        sm2.setParams(x);
+
+        sm2.feedData(measureData2);
+
+        int ststus2 = sm2.solve();
+
+        auto meanerror2 = sm2.getMeanError();
+
+        auto x2 = sm2.getParam();
+        if (meanerror2 < best_fit_error){
+            best_fit_error = meanerror2;
+
+            best_x = x2;
+        }
+
+    }
+    ROS_ERROR_STREAM("get best_x \n"<<best_x<<std::endl << "best_fit_error "<<best_fit_error);
+
+    // check error
+    //rule 1: mean error
+    // rule 2: relative angle
+    if (best_fit_error > max_fit_error_  ){
+        ROS_ERROR("Fit fail: erro %.3f > %.3f", best_fit_error, max_fit_error_);
+        return false;
+    }
+
+
+    // get marker_in map and marker_in_laser
+
+    eigen_util::TransformationMatrix2d transFit(best_x(0), best_x(1), best_x(2));
+
+
+    decltype(model) marker_in_laser = transFit*model;
+
+    geometry_msgs::Pose marker_in_map_pose;
+    geometry_msgs::Pose marker_in_laser_pose;
+    marker_in_map_pose.position.z = mapToLaser_tf.getOrigin().z();
+    marker_in_laser_pose.position.z = mapToLaser_tf.getOrigin().z();
+
+
+    double yaw;
+    Eigen::VectorXd m(2);
+
+    // marker in laser
+    m = marker_in_laser.rowwise().mean();
+    marker_in_laser_pose.position.x = m(0);
+    marker_in_laser_pose.position.y = m(1);
+    yaw = double(atan2(marker_in_laser(1, 1) - marker_in_laser(1, 0), marker_in_laser(0, 1) - marker_in_laser(0, 0)));
+
+    tf::quaternionTFToMsg(tf_util::createQuaternionFromYaw(yaw),marker_in_laser_pose.orientation);
+
+
+    // marker in map
+    m = marker_in_map.rowwise().mean();
+    marker_in_map_pose.position.x = m(0);
+    marker_in_map_pose.position.y = m(1);
+    yaw = double(atan2(marker_in_map(1, 1) - marker_in_map(1, 0), marker_in_map(0, 1) - marker_in_map(0, 0)));
+
+    tf::quaternionTFToMsg(tf_util::createQuaternionFromYaw(yaw),marker_in_map_pose.orientation);
+
+    tf::poseMsgToTF(marker_in_laser_pose, marker_in_laser_tf);
+
+    tf::poseMsgToTF(marker_in_map_pose, marker_in_map_tf);
+
+
+    return true;
+}
 
 
 namespace line_extraction{

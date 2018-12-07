@@ -205,10 +205,12 @@ namespace line_extraction{
 
         bool fitModel(vector<type_util::Point2d> & pointsInModel,double x0, double x1, double x2,geometry_msgs::PoseStamped & ModelPose);
 
+        void updateParams();
     public:
         SimpleTriangleDetector(ros::NodeHandle nh, ros::NodeHandle nh_private);
         ~SimpleTriangleDetector();
         vector<geometry_msgs::PoseStamped> detect();
+        bool detectFreeMarkers(tf::Transform map_laser_tf, tf::Transform& marker_in_map_tf, tf::Transform& marker_in_laser_tf);
 
         void matchMarkers(const Eigen::MatrixXd &m1, const Eigen::MatrixXd &m2, std::vector<std::vector<int> > &ids_vec,
                           std::vector<double> &score_vec, std::vector<int> ids = std::vector<int>(), int m1_i = 0,
