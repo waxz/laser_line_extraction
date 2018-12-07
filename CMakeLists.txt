@@ -69,7 +69,7 @@ generate_messages(
 
 catkin_package(
   INCLUDE_DIRS include
-  LIBRARIES line line_extraction line_extraction_ros
+  LIBRARIES line line_extraction line_extraction_ros line_detector_lib
   CATKIN_DEPENDS geometry_msgs message_runtime roscpp sensor_msgs visualization_msgs
 )
 

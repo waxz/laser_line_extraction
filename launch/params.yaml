@@ -1,0 +1,81 @@
+frequency : 50.0
+frame_id : base_laser
+scan_topic : scan
+publish_markers : true
+bearing_std_dev : 1e-5
+range_std_dev : 0.02
+least_sq_angle_thresh : 0.01
+least_sq_radius_thresh : 0.01
+
+min_range : 0.1
+
+outlier_dist : 0.06
+
+min_split_dist : 0.03
+max_line_gap : 0.04
+max_indice_gap : 3
+
+min_line_length : 0.02
+
+min_line_points : 3
+
+use_scan : false
+
+
+
+marker_type : points-array
+use_fit_line : false
+debug : false
+max_range : 8.1
+min_angle : -1.575
+max_angle : 1.575
+min_intensity : 2300
+
+filter_window : 4
+
+min_grow_dist : 0.02
+min_gap_dist : 0.05
+
+min_segLength : 0.15
+max_segLength : 0.28
+min_segAngle : -1.8
+max_segAngle : 1.8
+min_segDist : 0.1
+max_segDist : 2.5
+
+min_shapeAngle : 1.74
+max_shapeAngle : 2.7
+min_pairInterAngle : -1.8
+max_pairInterAngle : 1.8
+min_pairInterLength : 0.15
+max_pairInterLength : 0.3
+
+max_fit_error : 0.05
+
+
+expire_sec : 10
+
+
+triangle_direction : -1
+
+
+max_marker_length : 0.09
+max_marker_initial_dist : 5.5
+max_marker_dist_diff : 0.1
+
+broadcast_tf : false
+pub_pose : false
+pub_lighthouse : false
+broadcast_map_odom_tf : true
+pub_initial_pose : false
+pub_waypoint_goal : true
+
+max_search_radius : 0.5
+min_match_valid : 3
+
+min_update_d : -0.02
+min_update_a : -0.02
+
+x_conv : 0.05
+y_conv : 0.05
+yaw_conv : 0.05

@@ -79,7 +79,7 @@ namespace line_extraction{
 
         //result
         std::vector<line_extraction::Line> lines_;
-        void processData();
+        void processData(sensor_msgs::LaserScan& msg);
         void initParam();
         void cacheData();
 
@@ -93,7 +93,7 @@ namespace line_extraction{
 
         void pubMarkers(std::vector<line_extraction::Line> lines);
         // get lines(0) or cluster(1)
-        void getLines(std::vector<line_extraction::Line> &line, detectMode mode = detectMode::lines);
+        void getLines(std::vector<line_extraction::Line> &line, detectMode mode = detectMode::lines, sensor_msgs::LaserScan msg = sensor_msgs::LaserScan());
     };
 
 
@@ -207,10 +207,10 @@ namespace line_extraction{
 
         void updateParams();
     public:
-        SimpleTriangleDetector(ros::NodeHandle nh, ros::NodeHandle nh_private);
+        SimpleTriangleDetector();
         ~SimpleTriangleDetector();
         vector<geometry_msgs::PoseStamped> detect();
-        bool detectFreeMarkers(tf::Transform map_laser_tf, tf::Transform& marker_in_map_tf, tf::Transform& marker_in_laser_tf);
+        bool detectFreeMarkers(const sensor_msgs::LaserScan& msg,tf::Transform map_laser_tf, tf::Transform& marker_in_map_tf, tf::Transform& marker_in_laser_tf);
 
         void matchMarkers(const Eigen::MatrixXd &m1, const Eigen::MatrixXd &m2, std::vector<std::vector<int> > &ids_vec,
                           std::vector<double> &score_vec, std::vector<int> ids = std::vector<int>(), int m1_i = 0,

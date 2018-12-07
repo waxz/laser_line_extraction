@@ -11,7 +11,8 @@ line_extraction::LineSegmentDetector::LineSegmentDetector(ros::NodeHandle nh, ro
         line_extraction::LineExtractionROS(nh, nh_private),
         nh_(nh),
         nh_private_(nh_private),
-        listener(nh, nh_private)
+        listener(nh, nh_private),
+        scan_data_(std::make_shared<sensor_msgs::LaserScan>())
 
 {
     initParam();
@@ -34,13 +35,14 @@ void line_extraction::LineSegmentDetector::initParam(){
     nh_private_.param("filter_window",filter_window_,4);
 
 };
-void line_extraction::LineSegmentDetector::processData(){
+void line_extraction::LineSegmentDetector::processData(sensor_msgs::LaserScan& msg){
     // mask ranges
     // set range > max_range to 0
 
     // mask intensities
     // set intesity < min_intensity to 0
-    auto msg = *scan_data_;
+//    auto msg = *scan_data_;
+    *scan_data_ = msg;
 
 
     valarray<float> r = container_util::createValarrayFromVector(msg.ranges);
@@ -80,36 +82,44 @@ void line_extraction::LineSegmentDetector::processData(){
     this->laserScanCallback(scan_ptr_);
 }
 
-void line_extraction::LineSegmentDetector::getLines( std::vector<line_extraction::Line> &line, detectMode mode){
+void line_extraction::LineSegmentDetector::getLines( std::vector<line_extraction::Line> &line, detectMode mode,sensor_msgs::LaserScan msg){
     line.clear();
     time_util::Timer timer;
     timer.start();
 
-    bool getMsg;
-    getMsg = listener.getOneMessage(this->scan_topic_,-1);
+    if (!msg.ranges.empty()){
+        processData(msg);
+
+    }else{
+        bool getMsg;
+        getMsg = listener.getOneMessage(this->scan_topic_,-1);
 #if 0
-    if (!getMsg){
+        if (!getMsg){
         std::cout<<std::endl;
 
         return ;
     }
 #endif
-    timer.stop();
-    std::cout<<std::endl;
+        timer.stop();
+        std::cout<<std::endl;
 
-    printf("wait msg  time %.6f\n",timer.elapsedSeconds());
-    std::cout<<std::endl;
+        printf("wait msg  time %.6f\n",timer.elapsedSeconds());
+        std::cout<<std::endl;
 
-    timer.start();
+        timer.start();
+
+
+        // process data
+        // get ptr from msg
+        // https://answers.ros.org/question/196697/get-constptr-from-message/
+        processData(*scan_data_);
+
+    }
 
 #if 0
-    printf("line_extraction_ time %.6f\n",timer.elapsedSeconds());
+    printf("\nline_extraction_ time %.6f\n",timer.elapsedSeconds());
     std::cout<<std::endl;
 #endif
-    // process data
-    // get ptr from msg
-    // https://answers.ros.org/question/196697/get-constptr-from-message/
-    processData();
 
 
 
@@ -129,7 +139,6 @@ void line_extraction::LineSegmentDetector::getLines( std::vector<line_extraction
     printf("line_extraction_ time %.6f\n",timer.elapsedSeconds());
     std::cout<<std::endl;
 
-    timer.start();
 
     // Also publish markers if parameter publish_markers is set to true
     if (this->pub_markers_)
@@ -138,10 +147,7 @@ void line_extraction::LineSegmentDetector::getLines( std::vector<line_extraction
         pubMarkers(line);
 #endif
     }
-    timer.stop();
-    std::cout<<std::endl;
 
-    std::cout<<std::endl;
 
 
 }
@@ -347,11 +353,11 @@ bool line_extraction::SimpleTriangleDetector::fitModel(vector<type_util::Point2d
 
 
 
-line_extraction::SimpleTriangleDetector::SimpleTriangleDetector(ros::NodeHandle nh, ros::NodeHandle nh_private):
-        nh_(nh),
-        nh_private_(nh_private),
-        listener_(nh,nh_private),
-        lsd_(nh,nh_private){
+line_extraction::SimpleTriangleDetector::SimpleTriangleDetector():
+        nh_(),
+        nh_private_("~"),
+        listener_(nh_,nh_private_),
+        lsd_(nh_,nh_private_){
     initParams();
 
 
@@ -392,6 +398,7 @@ line_extraction::SimpleTriangleDetector::SimpleTriangleDetector(ros::NodeHandle 
 };
 void line_extraction::SimpleTriangleDetector::reset() {
     firstPub_ = true;
+    updateParams();
 
 }
 line_extraction::SimpleTriangleDetector::~SimpleTriangleDetector() {
@@ -1413,12 +1420,28 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
 #endif
 
 void line_extraction::SimpleTriangleDetector::updateParams() {
+#if 1
+    try{
+        ROS_ERROR("try simple detector update param");
 
-    nh_private_.getParam("markers_array",params_);
+        nh_private_.getParam("markers_array",params_);
+
+    }catch (...){
+        throw std::logic_error("simple detector get markers_array fail");
+    }
+
+    ROS_ERROR("simple detector update param : size =  %d",params_.size());
+
+#endif
+
+    double min_intensity;
+    nh_private_.getParam("min_intensity",min_intensity);
+    ROS_ERROR("simple detector update min_intensity =  %.3f",min_intensity);
 
 }
 
-bool line_extraction::SimpleTriangleDetector::detectFreeMarkers(tf::Transform mapToLaser_tf,
+bool line_extraction::SimpleTriangleDetector::detectFreeMarkers(const sensor_msgs::LaserScan& msg,
+                                                                tf::Transform mapToLaser_tf,
                                                                 tf::Transform &marker_in_map_tf,
                                                                 tf::Transform &marker_in_laser_tf) {
 
@@ -1426,8 +1449,10 @@ bool line_extraction::SimpleTriangleDetector::detectFreeMarkers(tf::Transform ma
     marker_in_map_tf.setIdentity();
 
     // first detect lines
+    ROS_ERROR("simple detector get line start");
     std::vector<line_extraction::Line> lines;
-    lsd_.getLines(lines, line_extraction::LineSegmentDetector::detectMode::lights);
+    lsd_.getLines(lines, line_extraction::LineSegmentDetector::detectMode::lights,msg);
+    ROS_ERROR("simple detector get line done");
 
     // check valid marker num > min_match_valid_
     if (lines.size() < min_match_valid_){
@@ -1468,6 +1493,7 @@ bool line_extraction::SimpleTriangleDetector::detectFreeMarkers(tf::Transform ma
         model(0,i) = params_[i]["x"];
         model(1,i) = params_[i]["y"];
     }
+    ROS_ERROR_STREAM("marker param:\n" << model);
 
     decltype(model) marker_in_map = model;
 
@@ -1697,7 +1723,7 @@ namespace line_extraction{
 line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandle nh_private):
         nh_(nh),
         nh_private_(nh_private),
-        sd_(nh,nh_private),
+        sd_(),
         listener_(nh,nh_private),
         fake_pose_topic_("triangle_pose"),
         cmd_data_ptr_(std::make_shared<std_msgs::Header>()),
