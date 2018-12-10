@@ -80,10 +80,11 @@ namespace line_extraction{
         //result
         std::vector<line_extraction::Line> lines_;
         void processData(sensor_msgs::LaserScan& msg);
-        void initParam();
         void cacheData();
 
     public:
+        void initParam();
+
         enum detectMode{lines, segments, lights};
         LineSegmentDetector(ros::NodeHandle nh, ros::NodeHandle nh_private);
         bool getLaser(sensor_msgs::LaserScan &scan);

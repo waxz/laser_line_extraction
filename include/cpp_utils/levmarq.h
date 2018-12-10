@@ -153,7 +153,7 @@ namespace opt_util {
             // Create a LevenbergMarquardt object and pass it the functor_.
             Eigen::LevenbergMarquardt<T, double> lm(functor_);
             int status = lm.minimize(x_);
-            printf("LM optimization status: %d\n", status);
+//            printf("LM optimization status: %d\n", status);
             return status;
         }
 

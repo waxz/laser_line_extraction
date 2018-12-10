@@ -1435,6 +1435,7 @@ void line_extraction::SimpleTriangleDetector::updateParams() {
 #endif
 
     double min_intensity;
+    lsd_.initParam();
     nh_private_.getParam("min_intensity",min_intensity);
     ROS_ERROR("simple detector update min_intensity =  %.3f",min_intensity);
 
@@ -1684,40 +1685,6 @@ bool line_extraction::SimpleTriangleDetector::detectFreeMarkers(const sensor_msg
 }
 
 
-namespace line_extraction{
-    class SimpleLightBeltDetector{
-    protected:
-        ros::NodeHandle nh_;
-        ros::NodeHandle nh_private_;
-        rosnode::Listener listener_;
-
-        string scan_topic_;
-        double min_intensity_;
-        double min_line_length_;
-
-        std::shared_ptr<sensor_msgs::LaserScan> scan_data_;
-
-        void initPrams(){
-            nh_private_.param("scan_topic", scan_topic_, string("scan_filtered"));
-            nh_private_.param("min_intensity",min_intensity_,1000.0);
-            nh_private_.param("min_line_length",min_line_length_,0.4);
-
-        }
-    public:
-        SimpleLightBeltDetector(ros::NodeHandle nh, ros::NodeHandle nh_private):
-                nh_(nh),
-                nh_private_(nh_private),
-                listener_(nh, nh_private){
-
-            auto res = listener_.createSubcriber<sensor_msgs::LaserScan>(scan_topic_,1);
-            scan_data_ = std::get<0>(res);
-
-        }
-
-
-    };
-
-}
 
 
 line_extraction::TargetPublish::TargetPublish(ros::NodeHandle nh, ros::NodeHandle nh_private):
