@@ -454,10 +454,20 @@ namespace opt_util {
             Eigen::MatrixXd measuredX = measuredValues.block(0,0,2,values());
             Eigen::MatrixXd modelX = measuredValues.block(2,0,2,values());
 
+
+
             modelX = trans*modelX;
 
 
             fvec = (measuredX - modelX).colwise().norm();
+            bool useWeight = measuredX.rows() == 5;
+            if (useWeight){
+
+                Eigen::VectorXd weightX = measuredValues.row(5);
+                fvec = (fvec.array())*(weightX.array());
+            }
+
+
 
 #if 0
             for (int i = 0; i < values(); i++) {

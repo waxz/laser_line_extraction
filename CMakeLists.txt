@@ -23,6 +23,7 @@ if( NOT CMAKE_BUILD_TYPE )
 endif()
 
 if( CMAKE_BUILD_TYPE MATCHES Release )
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 endif()
 if( CMAKE_BUILD_TYPE MATCHES Debug )
@@ -94,17 +95,10 @@ target_link_libraries(line_detector_node line_detector_lib)
 
 add_dependencies(line_detector_node ${catkin_EXPORTED_TARGETS})
 
-#add_executable(shelf_detector_node src/shelf_detector_node.cpp)
-#target_link_libraries(shelf_detector_node line_detector_lib)
-
-#add_executable(line_detector_ekf_node src/ekf.cpp)
-#target_link_libraries(line_detector_ekf_node ${catkin_LIBRARIES})
 
 #add_executable(triangle_sim_node src/triangle_sim.cpp)
 #target_link_libraries(triangle_sim_node ${catkin_LIBRARIES})
 
-#add_executable(marker_detector src/marker_detector.cpp)
-#target_link_libraries(marker_detector line_detector_lib)
 
 # catkin_add_gtest(${PROJECT_NAME}-test test/test_laser_line_extraction.cpp)
 install(TARGETS line_detector_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})

@@ -27,7 +27,7 @@ int main(int argc, char **argv)
         t.start();
         targetPub_.publish();
         t.stop();
-        ROS_ERROR("full time %.4f", t.elapsedSeconds());
+//        ROS_ERROR("full time %.4f", t.elapsedSeconds());
         rate.sleep();
     }
     return 0;

@@ -33,6 +33,7 @@ public:
   void setLeastSqRadiusThresh(double);
   void setMaxLineGap(double);
   void setMinLineLength(double);
+  void setMaxLineLength(double);
   void setMinLinePoints(unsigned int);
   void setMinRange(double);
   void setMinSplitDist(double);

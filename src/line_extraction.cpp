@@ -165,6 +165,9 @@ void LineExtraction::setMinLineLength(double value)
 {
   params_.min_line_length = value;
 }
+void LineExtraction::setMaxLineLength(double value) {
+  params_.max_line_length = value;
+}
 
 void LineExtraction::setMinLinePoints(unsigned int value)
 {
@@ -284,7 +287,7 @@ void LineExtraction::filterLines()
   std::vector<Line> output;
   for (std::vector<Line>::const_iterator cit = lines_.begin(); cit != lines_.end(); ++cit)
   {
-    if (cit->length() >= params_.min_line_length && cit->numPoints() >= params_.min_line_points)
+    if (cit->length() >= params_.min_line_length && cit->numPoints() >= params_.min_line_points && cit->length() <= params_.max_line_length)
     {
       output.push_back(*cit);
     }

@@ -1,116 +1,39 @@
 <launch>
     <!--<node pkg="laser_line_extraction" type="line_detector_ekf_node" name="line_detector_ekf_node" output="screen">-->
-        <!--<param name="rate" value="30"/>-->
-        <!--<param name="cov_x" value="0.005"/>-->
-        <!--<param name="cov_y" value="0.03"/>-->
-        <!--<param name="cov_yaw" value="0.02"/>-->
+    <!--<param name="rate" value="30"/>-->
+    <!--<param name="cov_x" value="0.005"/>-->
+    <!--<param name="cov_y" value="0.03"/>-->
+    <!--<param name="cov_yaw" value="0.02"/>-->
 
     <!--</node>-->
 
     <!--<node pkg="robot_pose_ekf" type="robot_pose_ekf" name="triangle_pose_ekf" output="screen">-->
-        <!--<param name="output_frame" value="base_triangle"/>-->
-        <!--<param name="base_footprint_frame" value="base_link"/>-->
-        <!--<param name="freq" value="30.0"/>-->
-        <!--<param name="sensor_timeout" value="1.0"/>-->
-        <!--<param name="odom_used" value="true"/>-->
-        <!--<param name="imu_used" value="true"/>-->
-        <!--<param name="vo_used" value="false"/>-->
+    <!--<param name="output_frame" value="base_triangle"/>-->
+    <!--<param name="base_footprint_frame" value="base_link"/>-->
+    <!--<param name="freq" value="30.0"/>-->
+    <!--<param name="sensor_timeout" value="1.0"/>-->
+    <!--<param name="odom_used" value="true"/>-->
+    <!--<param name="imu_used" value="true"/>-->
+    <!--<param name="vo_used" value="false"/>-->
 
-        <!--<param name="inverse_tf" value="true"/>-->
-        <!--<remap from="odom" to="triangle_odom" />-->
+    <!--<param name="inverse_tf" value="true"/>-->
+    <!--<remap from="odom" to="triangle_odom" />-->
     <!--</node>-->
 
     <node name="line_detector_node" pkg="laser_line_extraction" type="line_detector_node">
-        <param name="~frequency" value="50.0" />
-        <param name="~frame_id" value="base_laser" />
-        <param name="~scan_topic" value="scan"/>
-        <param name="~publish_markers" value="true" />
-        <param name="~bearing_std_dev" value="1e-5" />
-        <param name="~range_std_dev" value="0.02" />
-        <param name="~least_sq_angle_thresh" value="0.01" />
-        <param name="~least_sq_radius_thresh" value="0.01" />
+        <rosparam command="load" file="$(find laser_line_extraction)/launch/params.yaml" />
+        <param name="max_search_radius" value="0.7" type="double"/>
+        <param name="min_intensity" value="200" type="double"/>
 
-        <param name="~min_range" value="0.1" />
-
-        <param name="~outlier_dist" value="0.06" />
-
-        <param name="~min_split_dist" value="0.03" />
-        <param name="~max_line_gap" value="0.04" />
-        <param name="~max_indice_gap" value="3" />
-
-        <param name="~min_line_length" value="0.02" />
-
-        <param name="~min_line_points" value="3" />
-
-        <param name="~use_scan" value="false"/>
-
-
-
-        <param name="marker_type" value="points-array"/>
-        <param name="use_fit_line" value="false"/>
-        <param name="debug" value="false"/>
-        <param name="max_range" value="8.1"/>
-        <param name="min_angle" value="-1.575"/>
-        <param name="max_angle" value="1.575"/>
-        <param name="min_intensity" value="0"/>
-
-        <param name="filter_window" value="4"/>
-
-        <param name="min_grow_dist" value="0.02"/>
-        <param name="min_gap_dist" value="0.05"/>
-
-        <param name="min_segLength" value="0.15"/>
-        <param name="max_segLength" value="0.28"/>
-        <param name="min_segAngle" value="-1.8"/>
-        <param name="max_segAngle" value="1.8"/>
-        <param name="min_segDist" value="0.1"/>
-        <param name="max_segDist" value="2.5"/>
-
-        <param name="min_shapeAngle" value="1.74"/>
-        <param name="max_shapeAngle" value="2.7"/>
-        <param name="min_pairInterAngle" value="-1.8"/>
-        <param name="max_pairInterAngle" value="1.8"/>
-        <param name="min_pairInterLength" value="0.15"/>
-        <param name="max_pairInterLength" value="0.3"/>
-
-        <param name="max_fit_error" value="0.05"/>
-
-
-        <param name="expire_sec" value="10"/>
-
-        <param name="broadcast_tf" value="false"/>
-        <param name="pub_pose" value="false"/>
-        <param name="triangle_direction" value="-1"/>
-
-
-        <param name="max_marker_length" value="0.09" type="double"/>
-        <param name="max_marker_initial_dist" value="5.5" type="double"/>
-        <param name="max_marker_dist_diff" value="0.1" type="double"/>
-
-        <param name="pub_lighthouse" value="false" type="bool"/>
-        <param name="broadcast_map_odom_tf" value="false" type="bool"/>
-        <param name="pub_initial_pose" value="false" type="bool"/>
-        <param name="pub_waypoint_goal" value="true" type="bool"/>
-        <param name="max_search_radius" value="0.5" type="double"/>
-        <param name="min_match_valid" value="3" type="int"/>
-
-        <param name="min_update_d" value="-0.02" type="double"/>
-        <param name="min_update_a" value="-0.02" type="double"/>
-
-        <param name="x_conv" value="0.05" type="double"/>
-        <param name="y_conv" value="0.05" type="double"/>
-        <param name="yaw_conv" value="0.05" type="double"/>
 
     <rosparam>
-      points_array :
-        - x : -0.422
-          y : 2.838
-        - x : -1.134
-          y : 2.855
-        - x : -1.155
-          y : 2.017
-        - x : -0.422
-          y : 2.023
+      markers_array :
+        - x : 4.135
+          y : -1.622
+        - x : 4.177
+          y : -1.245
+        - x : 4.189
+          y : -0.867
       target_pose :
         x : 0.0
         y : -0.0
@@ -120,9 +43,14 @@
 
     </node>
 
-  <node name="tf1" pkg="tf" type="static_transform_publisher" args="0.637  2.485 -0.0 -0.0 0.0 1.0 0.0 odom base_link 20"/>
-  <node name="tf2" pkg="tf" type="static_transform_publisher" args="0.33 0.000 0.160 0.000 0.000 0.000 1.000 base_link base_laser 20"/>
-  <node name="tf3" pkg="tf" type="static_transform_publisher" args="0 0 0 0 0 0 1 map odom 20"/>
+    <!--<node name="tf1" pkg="tf" type="static_transform_publisher" args="0 0 0 0 0 0 1 odom base_link 20" />-->
+    <!--<node name="tf2" pkg="tf" type="static_transform_publisher" args="0.1 0 0 0 0 0 1 base_link base_laser 20" />-->
+    <!--<node name="tf3" pkg="tf" type="static_transform_publisher" args="0 0 0 0 0 0 1 map odom 20" />-->
+
+    <node name="tf1" pkg="tf" type="static_transform_publisher" args="0 0 0 0 0 0 1 odom base_link 20"/>
+    <node name="tf2" pkg="tf" type="static_transform_publisher" args="0 0 0 0 0 0 1 base_link base_laser 20"/>
+    <node name="tf3" pkg="tf" type="static_transform_publisher" args="0 0 0 0 0 0 1 map odom 20"/>
+
 
 
 </launch>

@@ -21,19 +21,21 @@
     <!--</node>-->
     
     <node name="line_detector_node" pkg="laser_line_extraction" type="line_detector_node">
-        <rosparam command="load" file="$(find laser_line_extraction/launch/params.yaml" />
+        <rosparam command="load" file="$(find laser_line_extraction)/launch/params.yaml" />
+        <param name="max_search_radius" value="0.5" type="double"/>
+        <param name="min_intensity" value="1200" type="double"/>
+        <param name="mid_weight" value="1.5" type="double"/>
 
+        <param name="max_fit_error" value="0.09" type="double"/>
 
     <rosparam>
-      points_array :
-        - x : 1.889
-          y : 3.356
-        - x : 1.684
-          y : 3.819
-        - x : 0.787
-          y : 3.413
-        - x : 1.018
-          y : 2.944
+      markers_array :
+        - x : 0.358
+          y : 3.856
+        - x : -0.002
+          y : 3.698
+        - x : -0.345
+          y : 3.559
       target_pose :
         x : 0.0
         y : -0.0

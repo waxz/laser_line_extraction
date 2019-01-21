@@ -33,6 +33,9 @@ void line_extraction::LineSegmentDetector::initParam(){
     nh_private_.param("max_angle",angle_max_,0.5*M_PI);
     nh_private_.param("min_intensity",min_intensity_,100.0);
     nh_private_.param("filter_window",filter_window_,4);
+//    nh_private_.param("max_search_radius",max_search_radius_, 0.3);
+//
+    this->loadParameters();
 
 };
 void line_extraction::LineSegmentDetector::processData(sensor_msgs::LaserScan& msg){
@@ -253,6 +256,8 @@ void line_extraction::SimpleTriangleDetector::initParams(){
     nh_private_.param("yaw_conv",yaw_conv_, 0.05);
     nh_private_.param("pub_waypoint_goal", pub_waypoint_goal_, false);
 
+    //mid_weight
+    nh_private_.param("mid_weight",mid_weight_, 1.05);
 
 
 
@@ -526,6 +531,12 @@ void line_extraction::SimpleTriangleDetector::trackMarkers(const Eigen::MatrixXd
     if (get) {
         double min_diff2 = (m2.col(m2_i) - m1.col(m1_i)).norm();
         bool get2 =  min_diff2 < max_search_radius_;
+        if (get2 && ids.size()>0){
+            std::valarray<int> check_array( &(ids[0]), ids.size());
+            std::valarray<int> abs_check = abs(check_array - m2_i );
+
+            get2 = (abs_check.min() != 0);
+        }
 
 
         if (get2) {
@@ -962,9 +973,9 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
 
         // get params
 #if 0
-        nh_private_.param("points_array",params_);
+        nh_private_.param("markers_array",params_);
 #endif
-        nh_private_.getParam("points_array",params_);
+        nh_private_.getParam("markers_array",params_);
         board_or_shelf = params_.size() == 3;
         if (params_.size() == 3){
             board_or_shelf = true;
@@ -1049,7 +1060,7 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
 
             eigen_util::TransformationMatrix2d trans_laser(mapToLaser_tf.getOrigin().x(), mapToLaser_tf.getOrigin().y(), tf::getYaw(mapToLaser_tf.getRotation()));
             model = trans_laser.inverse()*model;
-            ROS_ERROR_STREAM("get  model pose \n"<<origin_pos<<"\n get relative model pose \n"<<model << "\n get laser in map  pose \n"<<trans_laser.matrix()<<"\n inverse \n"<< trans_laser.inverse().matrix());
+            ROS_ERROR_STREAM("get  model pose \n"<<origin_pos<<"\n get relative model pose \n"<<model << "\n get laser in map  pose \n"<<trans_laser.matrix());
 
 
             // check markers base  on distance
@@ -1104,7 +1115,7 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
             ROS_ERROR("best_id %d, score %.3f", best_i,best_score);
 #endif
             if (best_score > max_marker_dist_diff_){
-                ROS_ERROR("first_step failue");
+                ROS_ERROR("first_step failue best_score = %f  > max_marker_dist_diff : %f",best_score, max_marker_dist_diff_);
                 return targets;
 
             }
@@ -1120,7 +1131,11 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
             opt_util::SimpleSolver<opt_util::AngleFunctor> sm;
             opt_util::SimpleSolver<opt_util::AngleRangeFunctor> sm2;
 
-            for(auto v:id_vec){
+            for(int i = 0; i < id_vec.size(); i++){
+                auto v = id_vec[i];
+                if (score_vec[i] > max_marker_dist_diff_){
+                    continue;
+                }
 
                 // final match line segments
                 decltype(lines) matchlines;
@@ -1176,7 +1191,7 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
                         continue;
                     }
                     auto id1 = lines[dm].getIndices();
-
+                    double weight = 1.0;
                     for (int dj=0;dj < id1.size(); dj++){
 
                         // push x
@@ -1187,9 +1202,14 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
                         mdata.push_back(model(0,di));
                         mdata.push_back(model(1,di));
 
+                        //weight
+                        weight = (dj == 1) ? 1.0 : 1.0/mid_weight_;
+                        mdata.push_back(weight);
+
+
                     }
                 }
-                measureData2 = Eigen::Map<Eigen::MatrixXd>(mdata.data(), 4, mdata.size()/4);
+                measureData2 = Eigen::Map<Eigen::MatrixXd>(mdata.data(), 5, mdata.size()/5);
 
 #if 0
                 ROS_ERROR_STREAM("model 2 measuredata \n"<<measureData2);
@@ -1224,6 +1244,9 @@ vector<geometry_msgs::PoseStamped> line_extraction::SimpleTriangleDetector::dete
                 }
 #endif
                 // use x2
+                // avoid 180 rotate error
+                meanerror2 += (( fabs(x2(2)) > 0.2)) ? 1.0 : 0.0;
+
                 if (meanerror2 < best_fit_error){
                     best_fit_error = meanerror2;
 
@@ -1434,10 +1457,11 @@ void line_extraction::SimpleTriangleDetector::updateParams() {
 
 #endif
 
-    double min_intensity;
     lsd_.initParam();
-    nh_private_.getParam("min_intensity",min_intensity);
-    ROS_ERROR("simple detector update min_intensity =  %.3f",min_intensity);
+
+
+    nh_private_.param("max_search_radius",max_search_radius_, max_search_radius_);
+
 
 }
 
@@ -1544,7 +1568,11 @@ bool line_extraction::SimpleTriangleDetector::detectFreeMarkers(const sensor_msg
     double best_fit_error = 10.0;
     auto best_x = x;
 
-    for (auto v : id_vec){
+    for(int i = 0; i < id_vec.size(); i++){
+        auto v = id_vec[i];
+        if (score_vec[i] > max_marker_dist_diff_){
+            continue;
+        }
 
         // not every marker in model has matched point in sensor data
 
@@ -1599,6 +1627,7 @@ bool line_extraction::SimpleTriangleDetector::detectFreeMarkers(const sensor_msg
             }
             auto id1 = lines[dm].getIndices();
 
+            double weight = 1.0;
             for (int dj=0;dj < id1.size(); dj++){
 
                 // push x
@@ -1609,9 +1638,15 @@ bool line_extraction::SimpleTriangleDetector::detectFreeMarkers(const sensor_msg
                 mdata.push_back(model(0,di));
                 mdata.push_back(model(1,di));
 
+                //weight
+                weight = (dj == 1) ? 1.0 : 1.0/mid_weight_;
+
+                mdata.push_back(weight);
+
+
             }
         }
-        measureData2 = Eigen::Map<Eigen::MatrixXd>(mdata.data(), 4, mdata.size()/4);
+        measureData2 = Eigen::Map<Eigen::MatrixXd>(mdata.data(), 5, mdata.size()/5);
 
 
         sm2.updataModel(model);
@@ -1622,9 +1657,15 @@ bool line_extraction::SimpleTriangleDetector::detectFreeMarkers(const sensor_msg
 
         int ststus2 = sm2.solve();
 
+        // fit error
+
         auto meanerror2 = sm2.getMeanError();
 
         auto x2 = sm2.getParam();
+        // avoid 180 rotate error
+        meanerror2 += (( fabs(x2(2)) > 0.2)) ? 1.0 : 0.0;
+
+
         if (meanerror2 < best_fit_error){
             best_fit_error = meanerror2;
 
@@ -1755,22 +1796,21 @@ void line_extraction::TargetPublish::publish(){
     // publish base_link pose in base_triangle
     // publish base_triangle pose in base_link
     // how to change state
-    if(!running_){
+    {
 
 
         bool getmsg = listener_.getOneMessage(cmd_topic_,0.05);
 
         if(getmsg){
-            if ( cmd_data_ptr_.get()->frame_id == "lighthouse_planner" || cmd_data_ptr_.get()->frame_id.empty() )
+            if ( cmd_data_ptr_.get()->seq == 0 )
             {
-                if ( cmd_data_ptr_.get()->seq == 0 )
-                {
-                    running_ = false;
-                }
-                else
-                {
-                    running_ = true;
-                }
+                running_ = false;
+            }
+            else
+            {
+                sd_.reset();
+
+                running_ = true;
             }
 
         }
@@ -1779,12 +1819,11 @@ void line_extraction::TargetPublish::publish(){
             pubthreadClass_.pause();
             tfthreadClass_.pause();
             if(broadcast_map_odom_tf_){
-                ROS_ERROR("stop reflector localization");
+                ROS_INFO("stop reflector localization");
 
                 nh_private_.setParam("/amcl/tf_broadcast", true);
             }
             // stop detector
-            sd_.reset();
             return;
         }
 

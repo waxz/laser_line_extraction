@@ -30,6 +30,7 @@ struct Params
   double least_sq_radius_thresh;
   double max_line_gap;
   double min_line_length;
+  double max_line_length;
   double min_range;
   double min_split_dist;
   double outlier_dist;

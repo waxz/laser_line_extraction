@@ -180,6 +180,8 @@ namespace line_extraction{
         double min_update_d_;
         double min_update_a_;
 
+        double mid_weight_;
+
 
 
         string odom_frame_id_;

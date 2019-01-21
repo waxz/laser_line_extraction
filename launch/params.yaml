@@ -16,6 +16,8 @@ max_line_gap : 0.04
 max_indice_gap : 3
 
 min_line_length : 0.02
+max_line_length : 0.09
+
 
 min_line_points : 3
 
@@ -30,7 +32,7 @@ max_range : 8.1
 min_angle : -1.575
 max_angle : 1.575
 min_intensity : 2300
-
+mid_weight: 1.0
 filter_window : 4
 
 min_grow_dist : 0.02

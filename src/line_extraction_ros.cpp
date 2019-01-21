@@ -85,7 +85,7 @@ void LineExtractionROS::loadParameters()
   // Parameters used by the line extraction algorithm
 
   double bearing_std_dev, range_std_dev, least_sq_angle_thresh, least_sq_radius_thresh,
-         max_line_gap, min_line_length, min_range, min_split_dist, outlier_dist;
+         max_line_gap, min_line_length,max_line_length, min_range, min_split_dist, outlier_dist;
   int min_line_points, max_indice_gap;
 
   nh_local_.param("debug",line_extraction_.debug_, false );
@@ -113,6 +113,12 @@ void LineExtractionROS::loadParameters()
   nh_local_.param<double>("min_line_length", min_line_length, 0.5);
   line_extraction_.setMinLineLength(min_line_length);
   ROS_DEBUG("min_line_length: %f", min_line_length);
+
+  //max_line_length
+  nh_local_.param<double>("max_line_length", max_line_length, 0.5);
+  line_extraction_.setMaxLineLength(max_line_length);
+  ROS_DEBUG("max_line_length: %f", max_line_length);
+
 
   nh_local_.param<double>("min_range", min_range, 0.4);
   line_extraction_.setMinRange(min_range);
